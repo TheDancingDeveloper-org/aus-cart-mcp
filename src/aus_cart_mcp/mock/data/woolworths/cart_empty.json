@@ -1,0 +1,16 @@
+{
+  "AvailableItems": [],
+  "Totals": {
+    "MarketDiscountableSubTotal": 0,
+    "MarketEligibleAmountForFlatShippingFee": 0,
+    "MarketSubTotal": 0,
+    "MarketTotal": 0,
+    "SubTotal": 0,
+    "Total": 0,
+    "TotalSavings": 0,
+    "WoolworthsDiscountableSubTotal": 0,
+    "WoolworthsSubTotal": 0,
+    "WoolworthsTotal": 0
+  },
+  "TotalTrolleyItemQuantity": 0
+}

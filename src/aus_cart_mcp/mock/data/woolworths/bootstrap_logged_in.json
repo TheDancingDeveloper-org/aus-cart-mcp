@@ -1,0 +1,9 @@
+{
+  "ShopperRequest": {
+    "IsGuest": false,
+    "FirstName": "Alex",
+    "Email": "alex@example.com",
+    "Id": 1001,
+    "OrderCount": 3
+  }
+}

@@ -1,0 +1,20 @@
+# aus-cart-mcp
+
+> MCP server that lets AI assistants search Australian retailers (Woolworths first; Coles, Amazon AU, Kmart, BIG W planned) and manage the user's own online cart. Multi-tenant and metered. AGPL-3.0. Unofficial: see docs/LEGAL.md.
+
+## Docs
+- [README](README.md): what it does, quick start, configuration, tools
+- [AGENTS.md](AGENTS.md): operating manual for coding agents (layout, invariants, commands, definition of done)
+- [Supported retailers](docs/RETAILERS.md): the index and how to add a retailer
+- [Legal position](docs/LEGAL.md): read before use or redistribution
+- [Security](SECURITY.md): threat model and reporting
+
+## Code
+- [server.py](src/aus_cart_mcp/server.py): MCP tools, auth
+- [gateway.py](src/aus_cart_mcp/gateway.py): throttle, breaker, cache, sessions, metering
+- [retailers/](src/aus_cart_mcp/retailers/): retailer protocol and adapters
+- [store.py](src/aus_cart_mcp/store.py): tenants, encrypted sessions, usage
+- [mock/](src/aus_cart_mcp/mock/): mock retailers for tests and local dev
+
+## Tests
+- [tests/contract](tests/contract/test_retailer_contract.py): what every retailer adapter must satisfy

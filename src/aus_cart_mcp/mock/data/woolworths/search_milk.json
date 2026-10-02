@@ -1,0 +1,80 @@
+{
+  "Products": [
+    {
+      "Products": [
+        {
+          "Stockcode": 6073909,
+          "CupString": "$12.40 / 1L",
+          "Price": 5.95,
+          "Name": "Full+ On The Go Meal Replacement Chocolate",
+          "DisplayName": "Full+ On The Go Meal Replacement Chocolate 480mL",
+          "IsOnSpecial": false,
+          "WasPrice": 5.95,
+          "PackageSize": "480mL",
+          "IsAvailable": true
+        }
+      ]
+    },
+    {
+      "Products": [
+        {
+          "Stockcode": 6074037,
+          "CupString": "$12.40 / 1L",
+          "Price": 5.95,
+          "Name": "Full+ On The Go Meal Replacement Iced Coffee",
+          "DisplayName": "Full+ On The Go Meal Replacement Iced Coffee 480mL",
+          "IsOnSpecial": false,
+          "WasPrice": 5.95,
+          "PackageSize": "480mL",
+          "IsAvailable": true
+        }
+      ]
+    },
+    {
+      "Products": [
+        {
+          "Stockcode": 6052122,
+          "CupString": "$10.00 / 1L",
+          "Price": 3.5,
+          "Name": "Shake 2 Go Protein Liquid Recharge Milk Chocolate",
+          "DisplayName": "Shake 2 Go Protein Liquid Recharge Milk Chocolate 350mL",
+          "IsOnSpecial": false,
+          "WasPrice": 3.5,
+          "PackageSize": "350mL",
+          "IsAvailable": true
+        }
+      ]
+    },
+    {
+      "Products": [
+        {
+          "Stockcode": 6052006,
+          "CupString": "$10.00 / 1L",
+          "Price": 3.5,
+          "Name": "Shake 2 Go Protein Liquid Recharge Milk Vanilla",
+          "DisplayName": "Shake 2 Go Protein Liquid Recharge Milk Vanilla 350mL",
+          "IsOnSpecial": false,
+          "WasPrice": 3.5,
+          "PackageSize": "350mL",
+          "IsAvailable": true
+        }
+      ]
+    },
+    {
+      "Products": [
+        {
+          "Stockcode": 888140,
+          "CupString": "$1.65 / 1L",
+          "Price": 4.95,
+          "Name": "Woolworths Full Cream Milk",
+          "DisplayName": "Woolworths Full Cream Milk 3L",
+          "IsOnSpecial": false,
+          "WasPrice": 4.95,
+          "PackageSize": "3L",
+          "IsAvailable": true
+        }
+      ]
+    }
+  ],
+  "SearchResultsCount": 2025
+}

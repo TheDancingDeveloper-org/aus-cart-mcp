@@ -1,0 +1,12 @@
+# Organisation runner policy gate (TheDancingDeveloper-org/github-policy): every
+# job must select a self-hosted runner. Make `runner-policy` a required check.
+name: Runner policy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  runner-policy:
+    uses: TheDancingDeveloper-org/github-policy/.github/workflows/runner-policy-reusable.yml@main
