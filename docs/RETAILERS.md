@@ -27,6 +27,7 @@ With this method the server doesn't handle retailer passwords.
 
 - **Endpoints:** the same ones woolworths.com.au's own web app calls:
   - `POST /apis/ui/Search/products` for search;
+  - `GET /apis/ui/products/<id>,<id>,…` for products by stockcode, 20 per request (verified read-only 2026-10-03);
   - `GET /apis/ui/Trolley` for the cart;
   - `POST /api/v3/ui/trolley/update` to set quantities, where 0 removes;
   - `GET /api/ui/v2/bootstrap` for who is signed in;

@@ -90,3 +90,32 @@ async def test_a_refused_photo_does_not_pause_the_api(store, make_gateway, mock_
         await gateway.image(tenant, "woolworths", "888140")
     mock_state.blocked = False
     assert await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
+
+
+async def test_products_are_batched_cached_and_seeded_by_search(store, make_gateway, mock_state):
+    gateway = make_gateway()
+    tenant, _ = store.create_tenant_sync("t")
+    many = list(mock_state.catalogue)
+    for i in range(45):  # pad the mock catalogue so one call needs several chunks
+        mock_state.catalogue[900000 + i] = {**mock_state.catalogue[many[0]], "Stockcode": 900000 + i}
+    ids = [str(900000 + i) for i in range(45)]
+    before = len(mock_state.requests)
+    products = await gateway.products(tenant, "woolworths", [*ids, "1"])
+    assert [p.product_id for p in products] == ids  # input order, unknown id left out
+    product_calls = [r for r in mock_state.requests[before:] if "/apis/ui/products/" in r]
+    assert len(product_calls) == 3  # 45 ids in chunks of 20
+    again = len(mock_state.requests)
+    assert len(await gateway.products(tenant, "woolworths", ids[:5])) == 5
+    assert len(mock_state.requests) == again  # all cached
+    found = await gateway.search(tenant, "woolworths", "milk", limit=3, specials_only=False)
+    seeded = len(mock_state.requests)
+    await gateway.products(tenant, "woolworths", [p.product_id for p in found])
+    assert len(mock_state.requests) == seeded  # search results seed the per-id cache
+    usage = await store.usage_summary(tenant.id, 1)
+    assert usage["by_tool"]["get_products"]["upstream_requests"] == 4  # 3 chunks + the new connection's warm-up
+
+
+async def test_was_price_is_reported(store, gateway):
+    tenant, _ = store.create_tenant_sync("t")
+    milk = (await gateway.products(tenant, "woolworths", ["888140"]))[0]
+    assert milk.was_price == 4.95 and milk.price == 4.95

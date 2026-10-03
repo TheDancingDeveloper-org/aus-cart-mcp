@@ -14,7 +14,7 @@ from typing import Literal, Protocol
 
 import httpx
 
-Capability = Literal["search", "cart.read", "cart.write"]
+Capability = Literal["search", "products.read", "cart.read", "cart.write"]
 Status = Literal["supported", "experimental", "planned"]
 
 
@@ -41,6 +41,7 @@ class Product:
     on_special: bool = False
     url: str = ""
     image_url: str = ""
+    was_price: float | None = None  # the regular price while on special (None when not reported)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -117,6 +118,10 @@ class Retailer(Protocol):
     async def search(
         self, http: httpx.AsyncClient, query: str, *, limit: int, specials_only: bool
     ) -> list[Product]: ...
+
+    async def products(self, http: httpx.AsyncClient, product_ids: list[str]) -> list[Product]:
+        """Products by id, as many per upstream request as the retailer allows. Unknown ids are left out."""
+        ...
 
     async def cart(self, http: httpx.AsyncClient) -> Cart: ...
 

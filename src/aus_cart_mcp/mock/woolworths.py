@@ -56,6 +56,8 @@ class MockState:
         for group in search["Products"]:
             for p in group["Products"]:
                 self.catalogue[int(p["Stockcode"])] = p
+        for p in load("products_by_stockcode"):  # recorded from /apis/ui/products, fuller records
+            self.catalogue[int(p["Stockcode"])] = {**self.catalogue.get(int(p["Stockcode"]), {}), **p}
 
     def reset(self) -> None:
         self.sessions.clear()
@@ -121,6 +123,13 @@ def create_app(state: MockState | None = None) -> Starlette:
             hits = list(state.catalogue.values())  # the real site falls back to related products too
         return JSONResponse({"Products": [{"Products": [p]} for p in hits[:size]], "SearchResultsCount": len(hits)})
 
+    @api
+    async def products(request: Request) -> Response:
+        codes = request.path_params["codes"].split(",")
+        if len(codes) > 20:
+            return JSONResponse({"Message": "too many"}, status_code=400)
+        return JSONResponse([state.catalogue[int(c)] for c in codes if c.isdigit() and int(c) in state.catalogue])
+
     def cart_payload(cart: dict[int, float]) -> dict:
         items, total = [], 0.0
         for code, qty in cart.items():
@@ -179,6 +188,7 @@ def create_app(state: MockState | None = None) -> Starlette:
             Route("/shop/securelogin", login_form, methods=["GET", "POST"]),
             Route("/api/ui/v2/bootstrap", bootstrap),
             Route("/apis/ui/Search/products", search, methods=["POST"]),
+            Route("/apis/ui/products/{codes}", products),
             Route("/apis/ui/Trolley", trolley),
             Route("/api/v3/ui/trolley/update", update, methods=["POST"]),
             Route("/content/wowproductimages/medium/{code}.jpg", image),
