@@ -45,6 +45,7 @@ class Limits:
     search_ttl: float = 6 * 3600
     shopper_ttl: float = 5 * 60
     cart_ttl: float = 30
+    guest_idle: float = 30 * 60  # an idle anonymous connection starts afresh, like a new visitor
 
 
 @dataclass
@@ -78,6 +79,7 @@ class _Conn:
     http: httpx.AsyncClient
     transport: _MeteredTransport
     saved_jar: dict[str, str]
+    last_used: float = 0.0
 
 
 class Gateway:
@@ -152,7 +154,8 @@ class Gateway:
         key = (tenant_id, retailer.key)
         marker = (stored or {}).get("captured_at") or "guest"
         conn = self._conns.get(key)
-        if conn is None or conn.marker != marker:
+        stale_guest = conn is not None and tenant_id is None and self._clock() - conn.last_used > self.limits.guest_idle
+        if conn is None or conn.marker != marker or stale_guest:
             if conn is not None:
                 await conn.http.aclose()
             cookies = dict((stored or {}).get("cookies") or {})
@@ -216,6 +219,7 @@ class Gateway:
             try:
                 prior = self._conns.get((conn_owner, retailer.key))
                 conn = await self._conn(retailer, conn_owner, stored)
+                conn.last_used = self._clock()
                 before = conn.transport.count if conn is prior else 0  # a new conn's warm-up counts too
                 try:
                     result = await fn(retailer, conn, stored)
