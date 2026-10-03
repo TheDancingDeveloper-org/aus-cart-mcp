@@ -158,10 +158,9 @@ class Woolworths:
             response = await http.get(self.image_url(product_id), headers=headers)
         except httpx.HTTPError as exc:
             raise RetailerError(f"Woolworths image unreachable: {exc}") from exc
-        if response.status_code in (403, 429):
-            raise Blocked(f"Woolworths is refusing requests (HTTP {response.status_code})")
-        if response.status_code == 404:
-            raise RetailerError(f"Woolworths has no photo for {product_id}")
+        if response.status_code in (403, 404, 429):
+            # The image CDN is not the data API: a refused photo must not trip the breaker for everything else.
+            raise RetailerError(f"Woolworths has no photo for {product_id} (HTTP {response.status_code})")
         if response.status_code >= 400:
             raise RetailerError(f"Woolworths returned HTTP {response.status_code} for the photo")
         content_type = response.headers.get("content-type", "").split(";")[0].strip()
