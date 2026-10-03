@@ -96,3 +96,20 @@ async def test_error_types_are_distinguishable(setup):
     """401 means reconnect; 403/429 or a web page means back off. Both are RetailerError."""
     assert issubclass(SessionRequired, RetailerError) and issubclass(Blocked, RetailerError)
     assert not issubclass(SessionRequired, Blocked)
+
+
+async def test_product_photos(setup):
+    """Search results carry an https photo URL; the adapter fetches a photo as image bytes."""
+    retailer, _, state, client = setup
+    async with client() as http:
+        product = (await retailer.search(http, "milk", limit=1, specials_only=False))[0]
+        assert product.image_url.startswith(("https://", "http://"))
+        data, content_type = await retailer.image(http, product.product_id)
+        assert data and content_type.startswith("image/")
+        with pytest.raises(RetailerError):
+            await retailer.image(http, "999999999")
+        with pytest.raises(RetailerError):
+            await retailer.image(http, "not-a-code")
+        state.blocked = True
+        with pytest.raises(Blocked):
+            await retailer.image(http, product.product_id)

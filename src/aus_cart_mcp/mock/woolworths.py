@@ -8,6 +8,7 @@ touching the real site:
 
 The catalogue comes from recorded public search results (mock/data/woolworths).
 Sign in at /shop/securelogin (any username) to get a logged-in session cookie.
+Product photos are served at /content/wowproductimages/medium/<stockcode>.jpg (the CDN path).
 Test hooks: POST /__mock/block {"on": true} makes every API call answer 403;
 POST /__mock/reset clears carts and sessions.
 """
@@ -25,6 +26,16 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
 
 SESSION_COOKIE = "mock-wow-session"
+# The smallest valid JPEG (a 1x1 white pixel): a stand-in for every product photo.
+TINY_JPEG = bytes.fromhex(
+    "ffd8ffe000104a46494600010100000100010000ffdb004300080606070605080707070909080a0c140d0c0b0b0c1912130f141d1a1f"
+    "1e1d1a1c1c20242e2720222c231c1c2837292c30313434341f27393d38323c2e333432ffc0000b080001000101011100ffc4001f0000"
+    "010501010101010100000000000000000102030405060708090a0bffc400b5100002010303020403050504040000017d010203000411"
+    "05122131410613516107227114328191a1082342b1c11552d1f02433627282090a161718191a25262728292a3435363738393a434445"
+    "464748494a535455565758595a636465666768696a737475767778797a838485868788898a92939495969798999aa2a3a4a5a6a7a8"
+    "a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffda0008"
+    "010100003f00fbd3ffd9"
+)
 BOT_COOKIES = {"bm_sz": "mock", "_abck": "mock"}
 
 
@@ -145,6 +156,15 @@ def create_app(state: MockState | None = None) -> Starlette:
                 cart[code] = qty
         return JSONResponse(load("update_ok"))
 
+    async def image(request: Request) -> Response:
+        state.requests.append(f"GET {request.url.path}")
+        if state.blocked:
+            return HTMLResponse("<html>Access denied</html>", status_code=403)
+        code = request.path_params["code"]
+        if not code.isdigit() or int(code) not in state.catalogue:
+            return Response(status_code=404)
+        return Response(TINY_JPEG, media_type="image/jpeg")
+
     async def block(request: Request) -> Response:
         state.blocked = bool((await request.json()).get("on", True))
         return JSONResponse({"blocked": state.blocked})
@@ -161,6 +181,7 @@ def create_app(state: MockState | None = None) -> Starlette:
             Route("/apis/ui/Search/products", search, methods=["POST"]),
             Route("/apis/ui/Trolley", trolley),
             Route("/api/v3/ui/trolley/update", update, methods=["POST"]),
+            Route("/content/wowproductimages/medium/{code}.jpg", image),
             Route("/__mock/block", block, methods=["POST"]),
             Route("/__mock/reset", reset, methods=["POST"]),
         ]

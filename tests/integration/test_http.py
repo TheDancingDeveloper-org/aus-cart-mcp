@@ -75,6 +75,7 @@ async def test_tool_list_and_retailer_index(base_url, store):
             "connect_session",
             "disconnect_session",
             "usage_summary",
+            "get_product_image",
             "get_trolley",
             "add_to_trolley",
             "set_trolley_quantities",
@@ -129,3 +130,17 @@ async def test_two_customers_cannot_see_each_others_cart(base_url, store, mock_s
     async with client(base_url, bob) as c:
         denied = await c.call_tool("get_cart", {})
         assert denied.is_error
+
+
+async def test_product_photo_tool(base_url, store):
+    import base64
+
+    _, key = store.create_tenant_sync("owner")
+    async with client(base_url, key) as c:
+        found = json.loads(text(await c.call_tool("search_products", {"query": "milk", "limit": 1})))
+        assert found[0]["image_url"]
+        photo = json.loads(text(await c.call_tool("get_product_image", {"product_id": found[0]["product_id"]})))
+        assert photo["content_type"] == "image/jpeg"
+        assert base64.b64decode(photo["data_base64"]).startswith(b"\xff\xd8")
+        missing = await c.call_tool("get_product_image", {"product_id": "999999999"})
+        assert missing.is_error and "no photo" in text(missing)

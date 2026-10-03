@@ -66,3 +66,15 @@ async def test_refreshed_cookies_are_persisted(store, gateway, mock_state):
     await gateway.connect(tenant, "woolworths", {k: v for k, v in parse_cookie_header(header).items() if k != "bm_sz"})
     stored = await store.get_session(tenant.id, "woolworths")
     assert "mock-wow-session" in stored["cookies"]
+
+
+async def test_photos_are_metered_and_cached(store, make_gateway, mock_state):
+    gateway = make_gateway()
+    tenant, _ = store.create_tenant_sync("t")
+    data, content_type = await gateway.image(tenant, "woolworths", "888140")
+    assert content_type == "image/jpeg" and data.startswith(b"\xff\xd8")
+    sent = len(mock_state.requests)
+    assert await gateway.image(tenant, "woolworths", "888140") == (data, content_type)
+    assert len(mock_state.requests) == sent  # served from the cache
+    usage = await store.usage_summary(tenant.id, 1)
+    assert usage["by_tool"]["get_product_image"]["calls"] == 2

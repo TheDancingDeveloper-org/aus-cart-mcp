@@ -40,6 +40,7 @@ class Product:
     available: bool = True
     on_special: bool = False
     url: str = ""
+    image_url: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -120,3 +121,7 @@ class Retailer(Protocol):
     async def cart(self, http: httpx.AsyncClient) -> Cart: ...
 
     async def set_quantities(self, http: httpx.AsyncClient, quantities: dict[str, float]) -> None: ...
+
+    async def image(self, http: httpx.AsyncClient, product_id: str) -> tuple[bytes, str]:
+        """The product's photo as `(bytes, content type)`."""
+        ...

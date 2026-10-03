@@ -29,6 +29,7 @@ retailer.
   | `set_cart_quantities` | set exact quantities; 0 removes |
   | `connection_status` | whether the retailer session is connected |
   | `connect_session` / `disconnect_session` | connect or forget a retailer session (admin) |
+  | `get_product_image` | a product's photo (base64); fetch once and keep a copy |
   | `usage_summary` | metered usage for this account |
 
 - **Multi-tenant:**
