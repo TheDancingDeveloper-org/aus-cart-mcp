@@ -291,6 +291,23 @@ class Gateway:
         results = await self._run(tenant, retailer.key, "search_products", fn, guest_ok=True)
         return self._remember(key, results, self.limits.search_ttl)[:limit]
 
+    async def image(self, tenant: Tenant, retailer_key: str, product_id: str) -> tuple[bytes, str]:
+        """A product photo, through the same spacing, cap, breaker and metering as everything else.
+
+        Photos rarely change: callers should fetch once and keep their own copy."""
+        retailer = get_retailer(retailer_key)
+        key = ("image", retailer.key, str(product_id))
+        cached = self._cached(key)
+        if cached is not None:
+            await self.store.record_usage(tenant.id, "get_product_image", retailer.key, True, 0)
+            return cached
+
+        async def fn(r: Retailer, conn: _Conn, s: dict | None) -> tuple[bytes, str]:
+            return await r.image(conn.http, str(product_id))
+
+        result = await self._run(tenant, retailer.key, "get_product_image", fn, guest_ok=True)
+        return self._remember(key, result, self.limits.search_ttl)
+
     async def cart(self, tenant: Tenant, retailer_key: str) -> Cart:
         retailer = get_retailer(retailer_key)
         key = ("cart", tenant.id, retailer.key)

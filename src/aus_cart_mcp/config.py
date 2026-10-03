@@ -31,5 +31,10 @@ def base_url_override(retailer_key: str) -> str | None:
     return os.environ.get(f"AUS_CART_MCP_{retailer_key.upper()}_BASE_URL") or None
 
 
+def image_base_url_override(retailer_key: str) -> str | None:
+    """`AUS_CART_MCP_<KEY>_IMAGE_BASE_URL`, else the retailer base-URL override (a mock serves both)."""
+    return os.environ.get(f"AUS_CART_MCP_{retailer_key.upper()}_IMAGE_BASE_URL") or base_url_override(retailer_key)
+
+
 def port() -> int:
     return int(os.environ.get("PORT", "8080"))

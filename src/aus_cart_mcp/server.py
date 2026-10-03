@@ -6,6 +6,7 @@ Bearer <customer API key>``; tools act for that customer only. ``/healthz`` is o
 
 from __future__ import annotations
 
+import base64
 import functools
 import json
 from http.cookies import SimpleCookie
@@ -180,6 +181,18 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
         """ADMIN: forget the user's stored retailer session."""
         await gateway.disconnect(await tenant_of(ctx), retailer)
         return result({"connected": False, "retailer": retailer})
+
+    @tool()
+    async def get_product_image(product_id: str, ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+        """A product's photo as base64 with its content type. Photos rarely change: fetch once and keep a copy."""
+        data, content_type = await gateway.image(await tenant_of(ctx), retailer, product_id)
+        return result(
+            {
+                "product_id": str(product_id),
+                "content_type": content_type,
+                "data_base64": base64.b64encode(data).decode(),
+            }
+        )
 
     @tool()
     async def usage_summary(ctx: Context, days: int = 30) -> str:

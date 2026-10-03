@@ -4,6 +4,7 @@
   GET  /apis/ui/Trolley            trolley contents and totals
   POST /api/v3/ui/trolley/update   set absolute quantities (0 removes)
   GET  /api/ui/v2/bootstrap        ShopperRequest.IsGuest / FirstName: who is logged in
+  GET  cdn0.woolworths.media/content/wowproductimages/medium/<stockcode>.jpg   product photo
 
 Unofficial: Woolworths publishes no API for this and its site terms forbid
 automated access. See docs/LEGAL.md before offering this to anyone else.
@@ -16,6 +17,7 @@ from urllib.parse import quote
 
 import httpx
 
+from aus_cart_mcp import config
 from aus_cart_mcp.retailers.base import (
     Blocked,
     Cart,
@@ -28,6 +30,8 @@ from aus_cart_mcp.retailers.base import (
 )
 
 MAX_ITEMS_PER_UPDATE = 30
+IMAGE_BASE_URL = "https://cdn0.woolworths.media"
+MAX_IMAGE_BYTES = 1_000_000
 _API_HEADERS = {"Accept": "application/json, text/plain, */*"}
 
 
@@ -120,6 +124,7 @@ class Woolworths:
                         available=bool(p.get("IsAvailable", True)),
                         on_special=bool(p.get("IsOnSpecial", False)),
                         url=f"{self.base_url}/shop/productdetails/{code}",
+                        image_url=str(p.get("MediumImageFile") or p.get("SmallImageFile") or self.image_url(code)),
                     )
                 )
         return out[:limit]
@@ -140,6 +145,31 @@ class Woolworths:
         return Cart(
             items=items, subtotal=totals.get("SubTotal"), total=totals.get("Total"), savings=totals.get("TotalSavings")
         )
+
+    def image_url(self, product_id: str) -> str:
+        base = (config.image_base_url_override(self.key) or IMAGE_BASE_URL).rstrip("/")
+        return f"{base}/content/wowproductimages/medium/{int(product_id):06d}.jpg"
+
+    async def image(self, http: httpx.AsyncClient, product_id: str) -> tuple[bytes, str]:
+        if not str(product_id).isdigit():
+            raise RetailerError(f"'{product_id}' is not a Woolworths product id")
+        headers = {"Accept": "image/avif,image/webp,image/*,*/*;q=0.8", "Referer": f"{self.base_url}/"}
+        try:
+            response = await http.get(self.image_url(product_id), headers=headers)
+        except httpx.HTTPError as exc:
+            raise RetailerError(f"Woolworths image unreachable: {exc}") from exc
+        if response.status_code in (403, 429):
+            raise Blocked(f"Woolworths is refusing requests (HTTP {response.status_code})")
+        if response.status_code == 404:
+            raise RetailerError(f"Woolworths has no photo for {product_id}")
+        if response.status_code >= 400:
+            raise RetailerError(f"Woolworths returned HTTP {response.status_code} for the photo")
+        content_type = response.headers.get("content-type", "").split(";")[0].strip()
+        if not content_type.startswith("image/"):
+            raise RetailerError("Woolworths returned something that is not an image")
+        if len(response.content) > MAX_IMAGE_BYTES:
+            raise RetailerError("the photo is too large")
+        return response.content, content_type
 
     async def set_quantities(self, http: httpx.AsyncClient, quantities: dict[str, float]) -> None:
         if not quantities:

@@ -29,7 +29,9 @@ With this method the server doesn't handle retailer passwords.
   - `POST /apis/ui/Search/products` for search;
   - `GET /apis/ui/Trolley` for the cart;
   - `POST /api/v3/ui/trolley/update` to set quantities, where 0 removes;
-  - `GET /api/ui/v2/bootstrap` for who is signed in.
+  - `GET /api/ui/v2/bootstrap` for who is signed in;
+  - `GET cdn0.woolworths.media/content/wowproductimages/medium/<stockcode>.jpg` for product photos
+    (fetched on request through the gateway; clients should keep their own copy).
 - **Session:** `login_url` = `https://www.woolworths.com.au/shop/securelogin`, `cookie_url` = `https://www.woolworths.com.au/`.
 - **Limits:**
   - one request every ~1.5–2 s per retailer, shared by all customers;
