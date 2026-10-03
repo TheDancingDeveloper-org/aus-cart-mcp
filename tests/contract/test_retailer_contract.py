@@ -111,5 +111,6 @@ async def test_product_photos(setup):
         with pytest.raises(RetailerError):
             await retailer.image(http, "not-a-code")
         state.blocked = True
-        with pytest.raises(Blocked):
+        with pytest.raises(RetailerError) as refused:
             await retailer.image(http, product.product_id)
+        assert not isinstance(refused.value, Blocked)  # a refused photo never trips the breaker

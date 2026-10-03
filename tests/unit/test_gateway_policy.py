@@ -78,3 +78,15 @@ async def test_photos_are_metered_and_cached(store, make_gateway, mock_state):
     assert len(mock_state.requests) == sent  # served from the cache
     usage = await store.usage_summary(tenant.id, 1)
     assert usage["by_tool"]["get_product_image"]["calls"] == 2
+
+
+async def test_a_refused_photo_does_not_pause_the_api(store, make_gateway, mock_state):
+    from aus_cart_mcp.retailers.base import RetailerError
+
+    gateway = make_gateway()
+    tenant, _ = store.create_tenant_sync("t")
+    mock_state.blocked = True
+    with pytest.raises(RetailerError):
+        await gateway.image(tenant, "woolworths", "888140")
+    mock_state.blocked = False
+    assert await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
