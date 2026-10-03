@@ -119,3 +119,16 @@ async def test_was_price_is_reported(store, gateway):
     tenant, _ = store.create_tenant_sync("t")
     milk = (await gateway.products(tenant, "woolworths", ["888140"]))[0]
     assert milk.was_price == 4.95 and milk.price == 4.95
+
+
+async def test_an_idle_guest_connection_starts_afresh(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(search_ttl=0)
+    tenant, _ = store.create_tenant_sync("prices")
+    await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
+    warmups = mock_state.requests.count("GET /")
+    clock.now += 60
+    await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
+    assert mock_state.requests.count("GET /") == warmups  # still the same visitor
+    clock.now += 31 * 60
+    await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
+    assert mock_state.requests.count("GET /") == warmups + 1  # a new visitor: fresh cookies
