@@ -289,7 +289,30 @@ class Gateway:
             return await r.search(conn.http, query, limit=max(limit, 10), specials_only=specials_only)
 
         results = await self._run(tenant, retailer.key, "search_products", fn, guest_ok=True)
+        for product in results:  # a later get_products for these ids costs nothing
+            self._remember(("product", retailer.key, product.product_id), product, self.limits.search_ttl)
         return self._remember(key, results, self.limits.search_ttl)[:limit]
+
+    async def products(self, tenant: Tenant, retailer_key: str, product_ids: list[str]) -> list[Product]:
+        """Products by id, in input order; ids the retailer does not know are left out.
+
+        Each id is cached for the search TTL; only uncached ids go upstream, batched by the adapter."""
+        retailer = get_retailer(retailer_key)
+        ids = list(dict.fromkeys(str(i) for i in product_ids))
+        found = {i: p for i in ids if (p := self._cached(("product", retailer.key, i))) is not None}
+        wanted = [i for i in ids if i not in found]
+        if wanted:
+
+            async def fn(r: Retailer, conn: _Conn, s: dict | None) -> list[Product]:
+                return await r.products(conn.http, wanted)
+
+            for product in await self._run(tenant, retailer.key, "get_products", fn, guest_ok=True):
+                found[product.product_id] = self._remember(
+                    ("product", retailer.key, product.product_id), product, self.limits.search_ttl
+                )
+        else:
+            await self.store.record_usage(tenant.id, "get_products", retailer.key, True, 0)
+        return [found[i] for i in ids if i in found]
 
     async def image(self, tenant: Tenant, retailer_key: str, product_id: str) -> tuple[bytes, str]:
         """A product photo, through the same spacing, cap, breaker and metering as everything else.

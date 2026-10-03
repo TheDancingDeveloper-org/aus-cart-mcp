@@ -114,3 +114,19 @@ async def test_product_photos(setup):
         with pytest.raises(RetailerError) as refused:
             await retailer.image(http, product.product_id)
         assert not isinstance(refused.value, Blocked)  # a refused photo never trips the breaker
+
+
+async def test_products_by_id(setup):
+    retailer, _, state, client = setup
+    async with client() as http:
+        found = await retailer.search(http, "milk", limit=3, specials_only=False)
+        ids = [p.product_id for p in found]
+        products = await retailer.products(http, [*ids, "999999999"])
+        assert {p.product_id for p in products} == set(ids)
+        for p in products:
+            assert isinstance(p, Product) and p.name and p.url.startswith("https://")
+        with pytest.raises(RetailerError):
+            await retailer.products(http, ["not-a-code"])
+        state.blocked = True
+        with pytest.raises(Blocked):
+            await retailer.products(http, ids[:1])

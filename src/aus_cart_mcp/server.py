@@ -27,6 +27,7 @@ from aus_cart_mcp.store import Store, Tenant
 SERVER_NAME = "aus-cart"
 DEFAULT_RETAILER = "woolworths"
 MAX_LIMIT = 30
+MAX_PRODUCT_IDS = 100
 
 INSTRUCTIONS = (
     "Search Australian retailers and manage the user's own online cart. Call list_retailers to see "
@@ -181,6 +182,19 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
         """ADMIN: forget the user's stored retailer session."""
         await gateway.disconnect(await tenant_of(ctx), retailer)
         return result({"connected": False, "retailer": retailer})
+
+    @tool()
+    async def get_products(product_ids: list[str], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+        """Look products up by product_id (up to 100), in one or a few upstream requests. Returns
+        {"products": [...], "missing": [...]}: current price, was_price, special flag, unit price, size, stock."""
+        ids = [str(i).strip() for i in product_ids or [] if str(i).strip()]
+        if not ids:
+            raise RetailerError("no product ids given")
+        if len(ids) > MAX_PRODUCT_IDS:
+            raise RetailerError(f"at most {MAX_PRODUCT_IDS} product ids per call")
+        products = await gateway.products(await tenant_of(ctx), retailer, ids)
+        known = {p.product_id for p in products}
+        return result({"products": [p.to_dict() for p in products], "missing": [i for i in ids if i not in known]})
 
     @tool()
     async def get_product_image(product_id: str, ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:

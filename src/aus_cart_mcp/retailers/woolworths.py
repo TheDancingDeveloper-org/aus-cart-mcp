@@ -1,6 +1,7 @@
 """Woolworths (Australia): the endpoints its own website calls (verified 2026-10-02).
 
   POST /apis/ui/Search/products   product search
+  GET  /apis/ui/products/<id,id,…> products by stockcode, batched (verified 2026-10-03, read-only)
   GET  /apis/ui/Trolley            trolley contents and totals
   POST /api/v3/ui/trolley/update   set absolute quantities (0 removes)
   GET  /api/ui/v2/bootstrap        ShopperRequest.IsGuest / FirstName: who is logged in
@@ -30,6 +31,8 @@ from aus_cart_mcp.retailers.base import (
 )
 
 MAX_ITEMS_PER_UPDATE = 30
+# Ids per products-by-stockcode request. The site's own maximum is unknown; 20 is conservative.
+MAX_IDS_PER_PRODUCTS_CALL = 20
 IMAGE_BASE_URL = "https://cdn0.woolworths.media"
 MAX_IMAGE_BYTES = 1_000_000
 _API_HEADERS = {"Accept": "application/json, text/plain, */*"}
@@ -41,7 +44,7 @@ class Woolworths:
         name="Woolworths",
         country="AU",
         status="supported",
-        capabilities=("search", "cart.read", "cart.write"),
+        capabilities=("search", "products.read", "cart.read", "cart.write"),
         site="https://www.woolworths.com.au",
         login_url="https://www.woolworths.com.au/shop/securelogin",
         cookie_url="https://www.woolworths.com.au/",
@@ -108,26 +111,59 @@ class Woolworths:
             "groupEdmVariants": False,
         }
         data = await self._json(http, "POST", "/apis/ui/Search/products", json=body)
-        out: list[Product] = []
-        for group in data.get("Products") or []:
-            for p in group.get("Products") or []:
-                if not p.get("Stockcode"):
-                    continue
-                code = str(int(p["Stockcode"]))
-                out.append(
-                    Product(
-                        product_id=code,
-                        name=str(p.get("DisplayName") or p.get("Name") or ""),
-                        price=p.get("Price"),
-                        unit_price=str(p.get("CupString") or ""),
-                        size=str(p.get("PackageSize") or ""),
-                        available=bool(p.get("IsAvailable", True)),
-                        on_special=bool(p.get("IsOnSpecial", False)),
-                        url=f"{self.base_url}/shop/productdetails/{code}",
-                        image_url=str(p.get("MediumImageFile") or p.get("SmallImageFile") or self.image_url(code)),
-                    )
-                )
+        out = [
+            self._product(p)
+            for group in data.get("Products") or []
+            for p in group.get("Products") or []
+            if p.get("Stockcode")
+        ]
         return out[:limit]
+
+    def _product(self, p: dict) -> Product:
+        code = str(int(p["Stockcode"]))
+        price, was = p.get("Price"), p.get("WasPrice")
+        return Product(
+            product_id=code,
+            name=str(p.get("DisplayName") or p.get("Name") or ""),
+            price=price,
+            unit_price=str(p.get("CupString") or ""),
+            size=str(p.get("PackageSize") or ""),
+            available=bool(p.get("IsAvailable", True)),
+            on_special=bool(p.get("IsOnSpecial", False)),
+            url=f"{self.base_url}/shop/productdetails/{code}",
+            image_url=str(p.get("MediumImageFile") or p.get("SmallImageFile") or self.image_url(code)),
+            was_price=was if isinstance(was, int | float) else None,
+        )
+
+    async def products(self, http: httpx.AsyncClient, product_ids: list[str]) -> list[Product]:
+        ids = list(dict.fromkeys(str(i) for i in product_ids))
+        for product_id in ids:
+            if not product_id.isdigit():
+                raise RetailerError(f"'{product_id}' is not a Woolworths product id")
+        out: list[Product] = []
+        for start in range(0, len(ids), MAX_IDS_PER_PRODUCTS_CALL):
+            chunk = ids[start : start + MAX_IDS_PER_PRODUCTS_CALL]
+            data = await self._json_list(http, f"/apis/ui/products/{','.join(chunk)}")
+            out += [self._product(p) for p in data if isinstance(p, dict) and p.get("Stockcode")]
+        return out
+
+    async def _json_list(self, http: httpx.AsyncClient, path: str) -> list:
+        headers = {**_API_HEADERS, "Referer": f"{self.base_url}/"}
+        try:
+            response = await http.get(path, headers=headers)
+        except httpx.HTTPError as exc:
+            raise RetailerError(f"Woolworths unreachable: {exc}") from exc
+        if response.status_code in (403, 429):
+            raise Blocked(f"Woolworths is refusing requests (HTTP {response.status_code})")
+        if response.status_code >= 400:
+            raise RetailerError(f"Woolworths returned HTTP {response.status_code}")
+        try:
+            data = response.json()
+        except json.JSONDecodeError as exc:
+            raise Blocked("Woolworths returned a web page instead of data (a bot challenge?)") from exc
+        if not isinstance(data, list):
+            raise RetailerError("Woolworths returned an unexpected response shape")
+        return data
 
     async def cart(self, http: httpx.AsyncClient) -> Cart:
         data = await self._json(http, "GET", "/apis/ui/Trolley")

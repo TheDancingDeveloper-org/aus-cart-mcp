@@ -144,3 +144,17 @@ async def test_product_photo_tool(base_url, store):
         assert base64.b64decode(photo["data_base64"]).startswith(b"\xff\xd8")
         missing = await c.call_tool("get_product_image", {"product_id": "999999999"})
         assert missing.is_error and "no photo" in text(missing)
+
+
+async def test_get_products_tool(base_url, store):
+    _, key = store.create_tenant_sync("owner")
+    async with client(base_url, key) as c:
+        names = {t.name for t in (await c.list_tools()).tools}
+        assert "get_products" in names
+        got = json.loads(text(await c.call_tool("get_products", {"product_ids": ["888140", "6073909", "1"]})))
+        assert [p["product_id"] for p in got["products"]] == ["888140", "6073909"] and got["missing"] == ["1"]
+        assert got["products"][0]["was_price"] == 4.95 and got["products"][0]["image_url"].endswith("888140.jpg")
+        empty = await c.call_tool("get_products", {"product_ids": []})
+        assert empty.is_error and "no product ids" in text(empty)
+        too_many = await c.call_tool("get_products", {"product_ids": [str(i) for i in range(101)]})
+        assert too_many.is_error and "at most 100" in text(too_many)
