@@ -35,7 +35,10 @@ Take legal advice before charging anyone.
 - **No evasion of bot protection:** no proxy rotation, no fingerprint spoofing,
   and no CAPTCHA or challenge solving. The server sends an ordinary browser user
   agent because the sites serve their data API only to browsers. When a site's
-  data API blocks us, every customer pauses for 30 minutes. A refused product photo
+  data API blocks us, every customer pauses for 30 minutes. The one exception: a customer
+  who has just reconnected (signed in again on their own device) gets one check of the
+  new session during the pause, at most once every 5 minutes. If it succeeds the pause
+  ends; if it is refused a new pause starts. Nothing is retried. A refused product photo
   (image CDN) is only "no photo" and pauses nothing.
 - **Sessions are borrowed, not kept alive.** A customer's session lives only as long
   as the retailer lets it: Woolworths' login lasts 60 minutes. Keeping its bot-protection
