@@ -23,6 +23,7 @@ import datetime
 import random
 import time
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
@@ -35,6 +36,9 @@ from aus_cart_mcp.store import Store, Tenant
 
 T = TypeVar("T")
 
+# Upstream requests allowed through an open breaker in the current task: a reconnect gets one check.
+_pause_pass: ContextVar[int] = ContextVar("aus_cart_mcp_pause_pass", default=0)
+
 
 @dataclass
 class Limits:
@@ -46,6 +50,7 @@ class Limits:
     shopper_ttl: float = 5 * 60
     cart_ttl: float = 30
     guest_idle: float = 30 * 60  # an idle anonymous connection starts afresh, like a new visitor
+    reconnect_check_interval: float = 5 * 60  # during a pause, one reconnect check per tenant per 5 minutes
 
 
 @dataclass
@@ -98,6 +103,7 @@ class Gateway:
         self._throttles: dict[str, _Throttle] = {}
         self._conns: dict[tuple[int | None, str], _Conn] = {}
         self._locks: dict[tuple[int | None, str], asyncio.Lock] = {}
+        self._reconnect_checks: dict[int, float] = {}  # tenant id -> clock of its last reconnect check in a pause
         self._cache: dict[tuple, tuple[float, Any]] = {}
 
     # ── throttle + breaker (per retailer) ─────────────────────────────────
@@ -110,7 +116,9 @@ class Gateway:
         async with t.lock:
             now = self._clock()
             if now < t.blocked_until:
-                raise Blocked(self._paused_message(retailer, now))
+                if _pause_pass.get() <= 0:
+                    raise Blocked(self._paused_message(retailer, now))
+                _pause_pass.set(_pause_pass.get() - 1)
             today = datetime.datetime.now(datetime.UTC).date()
             if today != t.day:
                 t.day, t.count = today, 0
@@ -242,7 +250,29 @@ class Gateway:
         if not cookies:
             raise SessionRequired("no cookies in the captured session")
         await self.store.put_session(tenant.id, retailer.key, {"cookies": cookies}, new=True)
-        shopper = await self._run(tenant, retailer.key, "connect_session", lambda r, c, s: r.shopper(c.http))
+        # A fresh session is the remedy for a block, so a reconnect may check it once during a pause
+        # (rate-limited per tenant). Success proves the retailer answers again and clears the pause;
+        # a refusal starts a new pause. Nothing is retried.
+        throttle = self._throttle(retailer.key)
+        paused = self._clock() < throttle.blocked_until
+        pass_token = None
+        if paused:
+            last = self._reconnect_checks.get(tenant.id, -1e9)
+            if self._clock() - last < self.limits.reconnect_check_interval:
+                raise Blocked(f"{self._paused_message(retailer.key, self._clock())}; a reconnect was just checked")
+            self._reconnect_checks[tenant.id] = self._clock()
+            pass_token = _pause_pass.set(2)  # the session check, plus a warm-up if the new connection needs one
+        try:
+            shopper = await self._run(tenant, retailer.key, "connect_session", lambda r, c, s: r.shopper(c.http))
+        except Blocked:
+            if paused:
+                self._trip(retailer.key)
+            raise
+        finally:
+            if pass_token is not None:
+                _pause_pass.reset(pass_token)
+        if paused:
+            throttle.blocked_until = 0.0
         if not shopper.logged_in:
             await self.disconnect(tenant, retailer.key)
             raise SessionRequired(f"that session is not logged in to {retailer.info.name}; sign in first")

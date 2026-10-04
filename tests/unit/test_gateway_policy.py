@@ -132,3 +132,43 @@ async def test_an_idle_guest_connection_starts_afresh(store, make_gateway, mock_
     clock.now += 31 * 60
     await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
     assert mock_state.requests.count("GET /") == warmups + 1  # a new visitor: fresh cookies
+
+
+async def _trip_breaker(gateway, tenant, mock_state):
+    from aus_cart_mcp.retailers.base import Blocked
+
+    mock_state.blocked = True
+    with pytest.raises(Blocked):
+        await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
+    mock_state.blocked = False
+    with pytest.raises(Blocked, match="paused"):
+        await gateway.search(tenant, "woolworths", "bread", limit=1, specials_only=False)
+
+
+async def test_a_reconnect_is_checked_once_during_a_pause_and_clears_it(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(search_ttl=0)
+    tenant, _ = store.create_tenant_sync("t")
+    await _trip_breaker(gateway, tenant, mock_state)
+    shopper = await gateway.connect(tenant, "woolworths", parse_cookie_header(signed_in_cookie(mock_state)))
+    assert shopper.logged_in
+    assert await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)  # pause cleared
+
+
+async def test_a_refused_reconnect_check_restarts_the_pause_and_is_rate_limited(store, make_gateway, mock_state, clock):
+    from aus_cart_mcp.retailers.base import Blocked
+
+    gateway = make_gateway(search_ttl=0)
+    tenant, _ = store.create_tenant_sync("t")
+    await _trip_breaker(gateway, tenant, mock_state)
+    mock_state.blocked = True
+    before = len(mock_state.requests)
+    with pytest.raises(Blocked):
+        await gateway.connect(tenant, "woolworths", parse_cookie_header(signed_in_cookie(mock_state)))
+    assert len(mock_state.requests) == before + 1  # one check, no retry
+    mock_state.blocked = False
+    clock.now += 60
+    with pytest.raises(Blocked, match="just checked"):  # a second reconnect within 5 minutes is not checked
+        await gateway.connect(tenant, "woolworths", parse_cookie_header(signed_in_cookie(mock_state)))
+    assert len(mock_state.requests) == before + 1
+    clock.now += 5 * 60
+    assert (await gateway.connect(tenant, "woolworths", parse_cookie_header(signed_in_cookie(mock_state)))).logged_in
