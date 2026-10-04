@@ -16,7 +16,7 @@ planned (see docs/RETAILERS.md).
 | Path | Responsibility |
 |---|---|
 | `src/aus_cart_mcp/server.py` | MCP tools, bearer auth middleware, `/healthz`, input validation |
-| `src/aus_cart_mcp/gateway.py` | The **only** way out to retailers: sessions, throttle, daily cap, circuit breaker, caches, metering |
+| `src/aus_cart_mcp/gateway.py` | The **only** way out to retailers: sessions, throttle, daily cap, circuit breaker (data API only, not photos), search/product/cart caches, idle guest-connection recycling, metering |
 | `src/aus_cart_mcp/retailers/base.py` | Retailer-neutral types (`Product`, `Cart`, `RetailerInfo`) and the `Retailer` protocol |
 | `src/aus_cart_mcp/retailers/<key>.py` | One adapter per retailer, plain HTTP mapping only |
 | `src/aus_cart_mcp/retailers/__init__.py` | The retailer index: `RETAILERS` (working) and `CATALOGUE` (including planned) |
@@ -68,6 +68,12 @@ AUS_CART_MCP_SECRET=dev uv run python -m aus_cart_mcp serve
 Customers sign in on the retailer's own site, on their own device. Apps hand the
 resulting cookies to `connect_session`; the server stores them encrypted.
 
+
+Sessions expire on the retailer's schedule. A Woolworths login token lasts 60 minutes,
+and ordinary calls don't renew it (Vogt WI-800). After that, calls made with the stale
+session can be refused outright. Clients that only need prices should use a tenant
+with **no** session, so every call is a fresh anonymous visitor. aus_cartwatch does this
+with tenant `aus-cartwatch-prices`.
 ## Recipes
 
 - **Add a retailer:** follow docs/RETAILERS.md § "Adding a retailer"

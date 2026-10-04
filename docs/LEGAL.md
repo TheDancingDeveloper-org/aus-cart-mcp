@@ -34,9 +34,15 @@ Take legal advice before charging anyone.
 
 - **No evasion of bot protection:** no proxy rotation, no fingerprint spoofing,
   and no CAPTCHA or challenge solving. The server sends an ordinary browser user
-  agent because the sites serve their data API only to browsers. When a site
-  blocks us, every customer pauses for 30 minutes.
-- Requests are serialised and spaced per retailer, with a daily cap.
+  agent because the sites serve their data API only to browsers. When a site's
+  data API blocks us, every customer pauses for 30 minutes. A refused product photo
+  (image CDN) is only "no photo" and pauses nothing.
+- **Sessions are borrowed, not kept alive.** A customer's session lives only as long
+  as the retailer lets it: Woolworths' login lasts 60 minutes. Keeping its bot-protection
+  cookies valid would need imitating a browser, which we don't do. Anonymous (guest)
+  calls start a fresh connection after 30 minutes idle, like a new visitor.
+- Requests are serialised and spaced per retailer, with a daily cap. Product lookups by id
+  are batched (20 per request) and cached for 6 hours, as are searches.
 - Customer sessions are encrypted at rest, and API keys are stored only as hashes.
 - Every tool call is metered per customer.
 
