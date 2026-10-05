@@ -9,6 +9,7 @@ See docs/RETAILERS.md.
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Literal, Protocol
 
@@ -42,9 +43,37 @@ class Product:
     url: str = ""
     image_url: str = ""
     was_price: float | None = None  # the regular price while on special (None when not reported)
+    savings: float | None = None  # was_price - price when on special (None when not reported)
+    unit_price_value: float | None = None  # numeric unit price, e.g. 1.65 for "$1.65 / 1L"
+    unit_price_unit: str = ""  # its measure, normalised: "1L", "100mL", "1kg", "100g", "1ea"
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+_CUP = re.compile(r"\$\s*([\d.,]+)\s*/\s*([\d.]*)\s*([A-Za-z]+)")
+_UNITS = {"l": "L", "ml": "mL", "g": "g", "kg": "kg", "ea": "ea", "each": "ea"}
+
+
+def normalise_measure(measure: str) -> str:
+    """`"100ML"` → `"100mL"`, `"1KG"` → `"1kg"`, `"EA"` → `"1ea"`; unknown units are lower-cased."""
+    match = re.fullmatch(r"\s*([\d.]*)\s*([A-Za-z]+)\s*", measure or "")
+    if not match:
+        return ""
+    amount, unit = match.group(1) or "1", match.group(2).lower()
+    return f"{amount}{_UNITS.get(unit, unit)}"
+
+
+def parse_unit_price(text: str) -> tuple[float | None, str]:
+    """`"$12.40 / 1L"` → `(12.4, "1L")`; unparseable → `(None, "")`."""
+    match = _CUP.search(text or "")
+    if not match:
+        return None, ""
+    try:
+        value = float(match.group(1).replace(",", ""))
+    except ValueError:
+        return None, ""
+    return value, normalise_measure(f"{match.group(2)}{match.group(3)}")
 
 
 @dataclass
