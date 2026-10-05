@@ -28,6 +28,8 @@ from aus_cart_mcp.retailers.base import (
     RetailerInfo,
     SessionRequired,
     Shopper,
+    normalise_measure,
+    parse_unit_price,
 )
 
 MAX_ITEMS_PER_UPDATE = 30
@@ -122,6 +124,15 @@ class Woolworths:
     def _product(self, p: dict) -> Product:
         code = str(int(p["Stockcode"]))
         price, was = p.get("Price"), p.get("WasPrice")
+        was = was if isinstance(was, int | float) else None
+        cup_value, cup_unit = parse_unit_price(str(p.get("CupString") or ""))
+        if isinstance(p.get("CupPrice"), int | float) and p.get("CupMeasure"):
+            cup_value, cup_unit = float(p["CupPrice"]), normalise_measure(str(p["CupMeasure"]))
+        savings = p.get("SavingsAmount")
+        if not isinstance(savings, int | float):
+            savings = (
+                round(was - price, 2) if isinstance(price, int | float) and was is not None and was > price else None
+            )
         return Product(
             product_id=code,
             name=str(p.get("DisplayName") or p.get("Name") or ""),
@@ -132,7 +143,10 @@ class Woolworths:
             on_special=bool(p.get("IsOnSpecial", False)),
             url=f"{self.base_url}/shop/productdetails/{code}",
             image_url=str(p.get("MediumImageFile") or p.get("SmallImageFile") or self.image_url(code)),
-            was_price=was if isinstance(was, int | float) else None,
+            was_price=was,
+            savings=savings,
+            unit_price_value=cup_value,
+            unit_price_unit=cup_unit,
         )
 
     async def products(self, http: httpx.AsyncClient, product_ids: list[str]) -> list[Product]:

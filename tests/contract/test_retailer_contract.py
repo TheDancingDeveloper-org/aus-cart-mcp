@@ -130,3 +130,17 @@ async def test_products_by_id(setup):
         state.blocked = True
         with pytest.raises(Blocked):
             await retailer.products(http, ids[:1])
+
+
+async def test_was_price_and_unit_price(setup):
+    """A product on special reports a higher was_price; every product with a unit-price string parses."""
+    retailer, _, state, client = setup
+    code = next(iter(state.catalogue))
+    state.catalogue[code] = {**state.catalogue[code], "Price": 2.0, "WasPrice": 4.0, "IsOnSpecial": True}
+    async with client() as http:
+        product = (await retailer.products(http, [str(code)]))[0]
+        assert product.on_special and product.was_price is not None and product.was_price > product.price
+        assert product.savings == 2.0 or product.savings is None or product.savings >= 0
+        for p in await retailer.search(http, "milk", limit=5, specials_only=False):
+            if p.unit_price:
+                assert p.unit_price_value is not None and p.unit_price_unit

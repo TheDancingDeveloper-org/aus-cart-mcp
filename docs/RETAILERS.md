@@ -33,6 +33,7 @@ With this method the server doesn't handle retailer passwords.
   - `GET /api/ui/v2/bootstrap` for who is signed in;
   - `GET cdn0.woolworths.media/content/wowproductimages/medium/<stockcode>.jpg` for product photos
     (fetched on request through the gateway; clients should keep their own copy).
+- **Product fields:** `price`, `was_price` (`WasPrice`), `savings` (`SavingsAmount`, else was − price), `unit_price` (the cup string) and its numeric form `unit_price_value` / `unit_price_unit` (`CupPrice`/`CupMeasure`, else parsed from the string; units normalised to `1L`, `100mL`, `1kg`, `100g`, `1ea`), `image_url`.
 - **Session:** `login_url` = `https://www.woolworths.com.au/shop/securelogin`, `cookie_url` = `https://www.woolworths.com.au/`.
 - **Limits:**
   - one request every ~1.5–2 s per retailer, shared by all customers;
