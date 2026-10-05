@@ -43,7 +43,9 @@ Take legal advice before charging anyone.
 - **Sessions are borrowed, not kept alive.** A customer's session lives only as long
   as the retailer lets it: Woolworths' login lasts 60 minutes. Keeping its bot-protection
   cookies valid would need imitating a browser, which we don't do. Anonymous (guest)
-  calls start a fresh connection after 30 minutes idle, like a new visitor.
+  calls start a fresh connection after 30 minutes idle, like a new visitor. Once a stored
+  login has expired (its token's `exp`), calls that need no login (search, product lookup)
+  go out as an anonymous visitor rather than with the stale cookies, which would be refused.
 - Requests are serialised and spaced per retailer, with a daily cap. Product lookups by id
   are batched (20 per request) and cached for 6 hours, as are searches.
 - Customer sessions are encrypted at rest, and API keys are stored only as hashes.

@@ -13,6 +13,7 @@ automated access. See docs/LEGAL.md before offering this to anyone else.
 
 from __future__ import annotations
 
+import base64
 import json
 from urllib.parse import quote
 
@@ -67,6 +68,18 @@ class Woolworths:
 
     def has_bot_cookies(self, cookies: dict[str, str]) -> bool:
         return any(k.startswith(("bm_", "_abck")) for k in cookies)
+
+    def login_expired(self, cookies: dict[str, str], now: float) -> bool:
+        """The login token (`wow-auth-token`, a JWT) lasts 60 minutes; only its `exp` claim is read."""
+        token = cookies.get("wow-auth-token") or cookies.get("prodwow-auth-token")
+        if not token or token.count(".") != 2:
+            return False
+        try:
+            part = token.split(".")[1]
+            exp = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))).get("exp")
+        except (ValueError, TypeError):
+            return False
+        return isinstance(exp, int | float) and exp <= now
 
     async def warm(self, http: httpx.AsyncClient) -> None:
         try:
