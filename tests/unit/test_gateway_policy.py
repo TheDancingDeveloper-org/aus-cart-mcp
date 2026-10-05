@@ -172,3 +172,40 @@ async def test_a_refused_reconnect_check_restarts_the_pause_and_is_rate_limited(
     assert len(mock_state.requests) == before + 1
     clock.now += 5 * 60
     assert (await gateway.connect(tenant, "woolworths", parse_cookie_header(signed_in_cookie(mock_state)))).logged_in
+
+
+def _jwt(exp: float) -> str:
+    import base64
+    import json
+
+    body = base64.urlsafe_b64encode(json.dumps({"exp": int(exp)}).encode()).decode().rstrip("=")
+    return f"h.{body}.s"
+
+
+async def test_searches_go_anonymous_when_the_stored_login_has_expired(store, make_gateway, mock_state):
+    import time
+
+    gateway = make_gateway(search_ttl=0)
+    tenant, _ = store.create_tenant_sync("owner")
+    cookies = parse_cookie_header(signed_in_cookie(mock_state))
+    await gateway.connect(tenant, "woolworths", cookies)
+    assert (tenant.id, "woolworths") in gateway._conns  # searches use the signed-in connection
+    stale = {**cookies, "wow-auth-token": _jwt(time.time() - 60)}
+    await store.put_session(tenant.id, "woolworths", {"cookies": stale})
+    await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
+    assert (None, "woolworths") in gateway._conns  # ...and an anonymous one once the login token expired
+    fresh = {**cookies, "wow-auth-token": _jwt(time.time() + 3600)}
+    await store.put_session(tenant.id, "woolworths", {"cookies": fresh})
+    gateway._conns.pop((None, "woolworths"))
+    await gateway.search(tenant, "woolworths", "bread", limit=1, specials_only=False)
+    assert (None, "woolworths") not in gateway._conns
+
+
+def test_woolworths_login_expiry_reads_only_exp():
+    from aus_cart_mcp.retailers.woolworths import Woolworths
+
+    w = Woolworths()
+    assert w.login_expired({"wow-auth-token": _jwt(100)}, 101)
+    assert not w.login_expired({"wow-auth-token": _jwt(200)}, 101)
+    assert not w.login_expired({}, 101) and not w.login_expired({"wow-auth-token": "garbage"}, 101)
+    assert not w.login_expired({"wow-auth-token": "a.!!!.c"}, 101)

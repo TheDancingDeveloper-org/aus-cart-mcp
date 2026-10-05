@@ -96,10 +96,12 @@ class Gateway:
         transport_factory: Callable[[], httpx.AsyncBaseTransport] = httpx.AsyncHTTPTransport,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        wall_clock: Callable[[], float] = time.time,
     ):
         self.store = store
         self.limits = limits or Limits()
         self._transport_factory, self._clock, self._sleep = transport_factory, clock, sleep
+        self._wall = wall_clock  # epoch seconds, for retailer token expiry
         self._throttles: dict[str, _Throttle] = {}
         self._conns: dict[tuple[int | None, str], _Conn] = {}
         self._locks: dict[tuple[int | None, str], asyncio.Lock] = {}
@@ -219,6 +221,10 @@ class Gateway:
     ) -> T:
         retailer = get_retailer(retailer_key)
         stored = await self.store.get_session(tenant.id, retailer.key)
+        if guest_ok and stored is not None and retailer.login_expired(stored.get("cookies") or {}, self._wall()):
+            # The stored login has expired, and stale session cookies get refused by bot protection (and would
+            # pause everyone). Calls that need no login go out as an anonymous visitor instead.
+            stored = None
         conn_owner = tenant.id if stored is not None or not guest_ok else None
         lock = self._locks.setdefault((conn_owner, retailer.key), asyncio.Lock())
         upstream, ok = 0, False
