@@ -1,4 +1,4 @@
-from aus_cartwatch import config
+from aus_cart_mcp.watch import config
 
 ALL = [
     "DB", "RETAILER", "AUS_CART_URL", "AUS_CART_KEY", "DAILY_UPSTREAM_CAP", "GATEWAY_DAILY_CAP",

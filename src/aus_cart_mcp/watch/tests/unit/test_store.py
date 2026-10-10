@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from aus_cartwatch.store import Migration, Store, _statements, bundled_migrations
+from aus_cart_mcp.watch.store import Migration, Store, _statements, bundled_migrations
 
 T0 = datetime(2026, 10, 1, 8, 0, tzinfo=UTC)
 

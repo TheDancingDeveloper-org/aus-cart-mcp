@@ -1,4 +1,4 @@
-"""The HTTP app: aus_cartwatch's MCP server (`/mcp`, CW-29), the web UI (CW-30), `/healthz` and `/metrics`.
+"""The HTTP app: aus_cart_mcp.watch's MCP server (`/mcp`, CW-29), the web UI (CW-30), `/healthz` and `/metrics`.
 
 `/mcp` needs `Authorization: Bearer <key>` where the key's SHA-256 is in
 `AUS_CARTWATCH_MCP_KEYS` (or the key is `AUS_CARTWATCH_MCP_KEY`); with no key
@@ -28,7 +28,7 @@ from aus_cart_mcp.watch.policy import Policy
 from aus_cart_mcp.watch.service import Service
 from aus_cart_mcp.watch.store import Store, utcnow
 
-SERVER_NAME = "aus_cartwatch"
+SERVER_NAME = "aus_cart_mcp.watch"
 MAX_HISTORY_POINTS = 200
 
 INSTRUCTIONS = (
@@ -312,13 +312,13 @@ def metrics_text(service: Service) -> str:
     store = service.store
     now = service.clock()
     lines = [
-        "# HELP aus_cartwatch_runs_total Runs by kind and outcome (all time).",
-        "# TYPE aus_cartwatch_runs_total counter",
+        "# HELP aus_cart_mcp.watch_runs_total Runs by kind and outcome (all time).",
+        "# TYPE aus_cart_mcp.watch_runs_total counter",
     ]
     for row in store._all(
         "SELECT kind, COALESCE(outcome, 'running') AS outcome, COUNT(*) AS n FROM runs GROUP BY 1, 2"
     ):
-        lines.append(f'aus_cartwatch_runs_total{{kind="{row["kind"]}",outcome="{row["outcome"]}"}} {row["n"]}')
+        lines.append(f'aus_cart_mcp.watch_runs_total{{kind="{row["kind"]}",outcome="{row["outcome"]}"}} {row["n"]}')
     last_ok = store._one(
         "SELECT MAX(finished_at) AS at FROM runs WHERE kind = 'refresh' AND outcome IN ('ok', 'partial')"
     )["at"]
@@ -326,13 +326,13 @@ def metrics_text(service: Service) -> str:
 
     pending = store._one("SELECT COUNT(*) AS n FROM alerts WHERE sent_at IS NULL")["n"]
     gauges = {
-        "aus_cartwatch_upstream_requests_today": service.scheduler.used_today(now),
-        "aus_cartwatch_daily_upstream_cap": service.scheduler.daily_cap,
-        "aus_cartwatch_tracked_items": len(store.list_tracked()),
-        "aus_cartwatch_alerts_pending": pending,
-        "aus_cartwatch_open_sale_episodes": len(store.open_sale_episodes()),
-        "aus_cartwatch_failure_streak": len(service.scheduler.failure_streak()),
-        "aus_cartwatch_last_successful_refresh_timestamp_seconds": int(parse_time(last_ok).timestamp())
+        "aus_cart_mcp.watch_upstream_requests_today": service.scheduler.used_today(now),
+        "aus_cart_mcp.watch_daily_upstream_cap": service.scheduler.daily_cap,
+        "aus_cart_mcp.watch_tracked_items": len(store.list_tracked()),
+        "aus_cart_mcp.watch_alerts_pending": pending,
+        "aus_cart_mcp.watch_open_sale_episodes": len(store.open_sale_episodes()),
+        "aus_cart_mcp.watch_failure_streak": len(service.scheduler.failure_streak()),
+        "aus_cart_mcp.watch_last_successful_refresh_timestamp_seconds": int(parse_time(last_ok).timestamp())
         if last_ok
         else 0,
     }

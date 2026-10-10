@@ -36,9 +36,9 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from aus_cart_mcp.watch import analytics, config
-from aus_cart_mcp.watch.types import AusCartError, Blocked, Product
 from aus_cart_mcp.watch.store import Store, utcnow
 from aus_cart_mcp.watch.tracking import Tracker
+from aus_cart_mcp.watch.types import AusCartError, Blocked, Product
 
 log = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ async def extract(
             }
         ],
     }
-    headers = {"Authorization": f"Bearer {key}", "X-Title": "aus_cartwatch receipts"}
+    headers = {"Authorization": f"Bearer {key}", "X-Title": "aus_cart_mcp.watch receipts"}
     async with httpx.AsyncClient(transport=transport, timeout=120) as http:
         try:
             response = await http.post(f"{config.openrouter_url()}/chat/completions", json=body, headers=headers)

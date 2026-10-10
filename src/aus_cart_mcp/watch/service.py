@@ -15,9 +15,9 @@ from datetime import datetime
 from aus_cart_mcp.watch import alerts, budget, cart, config, detect, receipts, tracking
 from aus_cart_mcp.watch.alerts.telegram import TelegramNotifier
 from aus_cart_mcp.watch.alerts.webhook import WebhookNotifier
-from aus_cart_mcp.watch.types import AusCartClient
 from aus_cart_mcp.watch.scheduler import Scheduler
 from aus_cart_mcp.watch.store import Store, utcnow
+from aus_cart_mcp.watch.types import AusCartClient
 
 log = logging.getLogger(__name__)
 
@@ -193,7 +193,7 @@ class Service:
     def start(self) -> None:
         """Start the scheduler loop and Telegram button polling (called from the app lifespan)."""
         if config.scheduler_enabled():
-            self._tasks.append(asyncio.create_task(self._loop(), name="aus_cartwatch-scheduler"))
+            self._tasks.append(asyncio.create_task(self._loop(), name="aus_cart_mcp.watch-scheduler"))
         if self.telegram is not None:
             self._tasks.append(
                 asyncio.create_task(self.telegram.poll_forever(self.store, self.handle_action), name="telegram")

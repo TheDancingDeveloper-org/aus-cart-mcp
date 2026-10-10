@@ -2,10 +2,10 @@
 
 from datetime import timedelta
 
-from aus_cartwatch import detect
-from aus_cartwatch.auscart import Cart, CartLine
-from aus_cartwatch.policy import Policy
-from aus_cartwatch.tracking import Tracker
+from aus_cart_mcp.watch import detect
+from aus_cart_mcp.watch.auscart import Cart, CartLine
+from aus_cart_mcp.watch.policy import Policy
+from aus_cart_mcp.watch.tracking import Tracker
 from tests.conftest import T0
 
 MILK, BREAD, EGGS, CHIPS = "1", "2", "3", "4"

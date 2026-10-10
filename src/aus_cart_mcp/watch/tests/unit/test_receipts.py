@@ -7,9 +7,9 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from aus_cartwatch import receipts
-from aus_cartwatch.auscart import Blocked, Product
-from aus_cartwatch.tracking import Tracker
+from aus_cart_mcp.watch import receipts
+from aus_cart_mcp.watch.auscart import Blocked, Product
+from aus_cart_mcp.watch.tracking import Tracker
 from tests.conftest import T0, FakeAusCart, product
 
 R = "woolworths"

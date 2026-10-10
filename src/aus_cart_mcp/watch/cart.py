@@ -14,8 +14,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from aus_cart_mcp.watch import alerts, config
-from aus_cart_mcp.watch.types import AusCartClient, AusCartError, Blocked, SessionRequired
 from aus_cart_mcp.watch.store import Store, iso, utcnow
+from aus_cart_mcp.watch.types import AusCartClient, AusCartError, Blocked, SessionRequired
 
 SNOOZE_DAYS = 28
 

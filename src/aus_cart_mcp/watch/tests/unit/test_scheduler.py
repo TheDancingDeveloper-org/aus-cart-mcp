@@ -4,9 +4,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from aus_cartwatch.auscart import Blocked, Unavailable
-from aus_cartwatch.policy import Policy
-from aus_cartwatch.scheduler import Scheduler
+from aus_cart_mcp.watch.auscart import Blocked, Unavailable
+from aus_cart_mcp.watch.policy import Policy
+from aus_cart_mcp.watch.scheduler import Scheduler
 from tests.conftest import FakeAusCart, product
 
 
@@ -258,7 +258,7 @@ def test_scheduled_snapshots_are_off_by_default(store, fake, clock):
 
 
 async def test_a_failing_batch_tool_falls_back_to_search(store, fake, clock):
-    from aus_cartwatch.auscart import RetailerError
+    from aus_cart_mcp.watch.auscart import RetailerError
 
     fake.tools.add("get_products")
     fake.batch_error = RetailerError("Woolworths returned an unexpected response shape")
