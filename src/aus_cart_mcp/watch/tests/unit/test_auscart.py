@@ -1,6 +1,6 @@
 import pytest
 
-from aus_cartwatch.auscart import (
+from aus_cart_mcp.watch.auscart import (
     AusCartClient,
     Blocked,
     Cart,

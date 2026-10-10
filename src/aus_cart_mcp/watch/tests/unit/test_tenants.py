@@ -1,7 +1,7 @@
 """Prices and search go through the anonymous tenant; cart actions through the owner's signed-in tenant."""
 
-from aus_cartwatch import config
-from aus_cartwatch.service import Service
+from aus_cart_mcp.watch import config
+from aus_cart_mcp.watch.service import Service
 from tests.conftest import FakeAusCart, product
 
 
@@ -44,7 +44,7 @@ def test_prices_key_falls_back_to_the_cart_key(monkeypatch):
 
 
 def test_budget_client_picks_the_key(store, monkeypatch):
-    from aus_cartwatch import budget
+    from aus_cart_mcp.watch import budget
 
     monkeypatch.setenv("AUS_CARTWATCH_AUS_CART_KEY", "cart-key")
     monkeypatch.setenv("AUS_CARTWATCH_AUS_CART_PRICES_KEY", "prices-key")

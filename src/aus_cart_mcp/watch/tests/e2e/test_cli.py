@@ -5,7 +5,7 @@ import io
 
 import pytest
 
-from aus_cartwatch import __main__ as cli
+from aus_cart_mcp.watch import __main__ as cli
 
 MILK = "888140"
 

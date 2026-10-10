@@ -4,9 +4,9 @@ from datetime import timedelta
 
 import pytest
 
-from aus_cartwatch.policy import Policy
-from aus_cartwatch.scheduler import Scheduler
-from aus_cartwatch.tracking import Tracker
+from aus_cart_mcp.watch.policy import Policy
+from aus_cart_mcp.watch.scheduler import Scheduler
+from aus_cart_mcp.watch.tracking import Tracker
 from tests.conftest import T0
 
 R = "woolworths"
@@ -128,8 +128,8 @@ async def test_photos_are_not_fetched_unless_enabled(store, fake, monkeypatch):
 
 
 def test_track_cart_lines_needs_no_retailer_call(store):
-    from aus_cartwatch.auscart import Cart, CartLine
-    from aus_cartwatch.detect import process_snapshot
+    from aus_cart_mcp.watch.auscart import Cart, CartLine
+    from aus_cart_mcp.watch.detect import process_snapshot
 
     process_snapshot(store, R, Cart([CartLine("7", "Eggs", 2, 6.8), CartLine("8", "Bread", 1, 3.5)]))
     results = Tracker(store, None, R).track_cart_lines(["7", "9"])

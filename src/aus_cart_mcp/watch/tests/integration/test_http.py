@@ -12,11 +12,11 @@ import pytest
 from mcp.client.client import Client
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
-from aus_cartwatch import __version__, config
-from aus_cartwatch.server import create_app, thin
-from aus_cartwatch.service import Service
-from aus_cartwatch.store import bundled_migrations
-from aus_cartwatch.web.auth import hash_password
+from aus_cart_mcp.watch import __version__, config
+from aus_cart_mcp.watch.server import create_app, thin
+from aus_cart_mcp.watch.service import Service
+from aus_cart_mcp.watch.store import bundled_migrations
+from aus_cart_mcp.watch.web.auth import hash_password
 from tests.conftest import T0, serve, stop
 
 KEY = "test-mcp-key"
@@ -56,7 +56,7 @@ async def test_healthz_and_metrics(app_url):
     assert health["ok"] and health["version"] == __version__
     assert health["schema_version"] == len(bundled_migrations())
     assert health["daily_cap"] == 60 and health["upstream_today"] == 0 and health["last_refresh"] is None
-    assert "aus_cartwatch_daily_upstream_cap 60" in metrics and "aus_cartwatch_tracked_items 0" in metrics
+    assert "aus_cart_mcp.watch_daily_upstream_cap 60" in metrics and "aus_cart_mcp.watch_tracked_items 0" in metrics
 
 
 @pytest.mark.parametrize("key", [None, "wrong"])
@@ -72,7 +72,7 @@ async def test_mcp_tools_end_to_end(app_url, fake):
         names = {t.name for t in (await c.list_tools()).tools}
         assert {"list_tracked", "track_item", "untrack_item", "price_history", "current_deals", "suggest_items",
                 "add_to_cart", "budget_status", "run_refresh"} <= names  # fmt: skip
-        assert all(len(f"aus_cartwatch__{n}") <= 64 for n in names)
+        assert all(len(f"aus_cart_mcp.watch__{n}") <= 64 for n in names)
 
         candidates, _ = await call(c, "track_item", {"query": "milk"})
         assert candidates["candidates"][0]["product_id"] == "1"
@@ -242,13 +242,13 @@ async def test_cart_page(app_url, fake, store):
         fake.session = False
         assert "session expired" in (await http.post("/cart/refresh")).text
         fake.session = True
-        fake.fail_with = __import__("aus_cartwatch.auscart", fromlist=["Blocked"]).Blocked("refusing (HTTP 403)")
+        fake.fail_with = __import__("aus_cart_mcp.watch.auscart", fromlist=["Blocked"]).Blocked("refusing (HTTP 403)")
         assert "refusing requests right now" in (await http.post("/cart/refresh")).text
 
 
 async def test_ui_candidates_flow(app_url, store):
-    from aus_cartwatch import detect
-    from aus_cartwatch.auscart import Cart, CartLine
+    from aus_cart_mcp.watch import detect
+    from aus_cart_mcp.watch.auscart import Cart, CartLine
 
     for _ in range(2):
         detect.process_snapshot(store, "woolworths", Cart([CartLine("3", "Free Range Eggs 12pk", 1, 6.8)]))
@@ -265,9 +265,9 @@ async def test_ui_candidates_flow(app_url, store):
 
 
 async def test_alerts_page_and_tool(app_url, store, fake):
-    from aus_cartwatch import alerts as alert_rules
-    from aus_cartwatch.auscart import Product
-    from aus_cartwatch.tracking import observe
+    from aus_cart_mcp.watch import alerts as alert_rules
+    from aus_cart_mcp.watch.auscart import Product
+    from aus_cart_mcp.watch.tracking import observe
 
     store.upsert_product("woolworths", "1", name="Full Cream Milk 3L")
     store.track("woolworths", "1")

@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 import uvicorn
 
-from aus_cartwatch import budget
-from aus_cartwatch.auscart import (
+from aus_cart_mcp.watch import budget
+from aus_cart_mcp.watch.auscart import (
     AusCartClient,
     Blocked,
     Cart,
@@ -22,7 +22,7 @@ from aus_cartwatch.auscart import (
     SessionRequired,
     Usage,
 )
-from aus_cartwatch.store import Store
+from aus_cart_mcp.watch.store import Store
 
 
 @pytest.fixture()

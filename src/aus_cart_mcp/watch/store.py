@@ -1,8 +1,8 @@
 """SQLite storage: migrations and the repository functions every other module uses.
 
-Migrations are numbered SQL files in ``aus_cartwatch/migrations`` (``0001_init.sql``,
+Migrations are numbered SQL files in ``aus_cart_mcp.watch/migrations`` (``0001_init.sql``,
 ``0002_...``). Each runs once, in order, inside a transaction, and is recorded in
-``schema_migrations``. They are applied by ``python -m aus_cartwatch db migrate``
+``schema_migrations``. They are applied by ``python -m aus_cart_mcp.watch db migrate``
 and at server start. Shipped migrations are never edited.
 
 One household, a few thousand rows a week: plain ``sqlite3`` on one connection
@@ -117,6 +117,7 @@ class Store:
         tid = self.tenant_id
         out = sql
         vals = list(params)
+
         # INSERT column lists: tenant_id is the first column and the first value.
         def _insert(match: re.Match) -> str:
             return f"{match.group(1)}(tenant_id, "

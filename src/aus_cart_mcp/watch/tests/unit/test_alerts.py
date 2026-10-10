@@ -3,10 +3,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from aus_cartwatch import alerts
-from aus_cartwatch.auscart import Product
-from aus_cartwatch.policy import Policy
-from aus_cartwatch.tracking import observe
+from aus_cart_mcp.watch import alerts
+from aus_cart_mcp.watch.auscart import Product
+from aus_cart_mcp.watch.policy import Policy
+from aus_cart_mcp.watch.tracking import observe
 from tests.conftest import T0
 
 SYD = ZoneInfo("Australia/Sydney")

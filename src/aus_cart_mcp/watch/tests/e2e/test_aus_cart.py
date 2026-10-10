@@ -1,12 +1,12 @@
-"""aus_cartwatch's client against the real aus-cart-mcp and its mock Woolworths, over real sockets."""
+"""aus_cart_mcp.watch's client against the real aus-cart-mcp and its mock Woolworths, over real sockets."""
 
 import json
 
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from aus_cartwatch.auscart import AusCartClient, Blocked, RetailerError, SessionRequired
-from aus_cartwatch.budget import client as ledgered_client
+from aus_cart_mcp.watch.auscart import AusCartClient, Blocked, RetailerError, SessionRequired
+from aus_cart_mcp.watch.budget import client as ledgered_client
 from tests.conftest import serve, stop
 
 MILK = "888140"
@@ -110,7 +110,7 @@ async def test_trolley_alias_fallback_for_older_servers():
 
 
 async def test_auscart_status_cli(aus_cart, store, monkeypatch, capsys):
-    from aus_cartwatch.__main__ import _auscart_status
+    from aus_cart_mcp.watch.__main__ import _auscart_status
 
     await aus_cart.connect_session("Jordan")
     monkeypatch.setenv("AUS_CARTWATCH_AUS_CART_URL", aus_cart.url)
