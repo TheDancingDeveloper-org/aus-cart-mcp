@@ -2,7 +2,7 @@ from datetime import time
 
 import pytest
 
-from aus_cartwatch.policy import Policy, in_window
+from aus_cart_mcp.watch.policy import Policy, in_window
 
 
 def test_defaults_and_overrides(store):

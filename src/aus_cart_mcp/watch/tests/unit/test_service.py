@@ -1,7 +1,7 @@
 import asyncio
 
-from aus_cartwatch import service as service_module
-from aus_cartwatch.service import Service, default_notifiers
+from aus_cart_mcp.watch import service as service_module
+from aus_cart_mcp.watch.service import Service, default_notifiers
 
 
 def test_default_notifiers_follow_configuration(monkeypatch):

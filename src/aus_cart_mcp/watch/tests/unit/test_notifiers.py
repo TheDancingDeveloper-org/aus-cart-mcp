@@ -4,9 +4,9 @@ import logging
 import httpx
 import pytest
 
-from aus_cartwatch.alerts import Message
-from aus_cartwatch.alerts.telegram import TelegramError, TelegramNotifier
-from aus_cartwatch.alerts.webhook import WebhookNotifier
+from aus_cart_mcp.watch.alerts import Message
+from aus_cart_mcp.watch.alerts.telegram import TelegramError, TelegramNotifier
+from aus_cart_mcp.watch.alerts.webhook import WebhookNotifier
 
 TOKEN = "123456:SECRET-TOKEN"
 ALERT = {"id": 7, "kind": "heavy_discount", "payload": {"name": "Coffee", "price": 5.0}}
@@ -153,7 +153,7 @@ async def test_check_reports_bot_and_chat_reachability():
 
 
 def test_cli_without_token(monkeypatch, capsys):
-    from aus_cartwatch.__main__ import main
+    from aus_cart_mcp.watch.__main__ import main
 
     monkeypatch.delenv("AUS_CARTWATCH_TELEGRAM_TOKEN", raising=False)
     assert main(["telegram", "check"]) == 2

@@ -2,7 +2,7 @@
 
 Deployment facts and secrets live here. Household preferences that the owner
 changes at runtime (cadence, thresholds, quiet hours) live in the database; see
-`aus_cartwatch.policy`.
+`aus_cart_mcp.watch.policy`.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def aus_cart_prices_key() -> str:
 
 
 def daily_upstream_cap() -> int:
-    """aus_cartwatch's own ceiling on upstream retailer requests per retailer per day (enforced by the scheduler)."""
+    """Own ceiling on upstream retailer requests per retailer per day (enforced by the scheduler)."""
     return int(env("DAILY_UPSTREAM_CAP", str(DEFAULT_DAILY_UPSTREAM_CAP)))
 
 
@@ -85,7 +85,7 @@ def scheduler_enabled() -> bool:
 
 
 def mcp_key_hashes() -> set[str]:
-    """SHA-256 hex digests of the keys allowed on aus_cartwatch's own `/mcp`.
+    """SHA-256 hex digests of the keys allowed on aus_cart_mcp.watch's own `/mcp`.
 
     `AUS_CARTWATCH_MCP_KEYS` holds digests (comma-separated); `AUS_CARTWATCH_MCP_KEY` holds one plain key,
     hashed here. With neither set, `/mcp` refuses every request.

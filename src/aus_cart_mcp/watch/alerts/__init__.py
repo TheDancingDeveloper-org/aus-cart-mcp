@@ -181,7 +181,7 @@ def _money(value) -> str:
 def describe(alert: dict) -> str:
     p = alert["payload"]
     if alert["kind"] == "operator":
-        return f"⚠️ aus_cartwatch: {p['text']}"
+        return f"⚠️ aus_cart_mcp.watch: {p['text']}"
     name = f"{p['name']} {p.get('size') or ''}".strip()
     reference = p.get("was_price") if (p.get("was_price") or 0) > (p.get("price") or 0) else p.get("baseline")
     parts = [f"{name}: {_money(p.get('price'))}"]

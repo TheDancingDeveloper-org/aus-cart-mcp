@@ -4,9 +4,9 @@ from datetime import timedelta
 
 import pytest
 
-from aus_cartwatch import analytics
-from aus_cartwatch.auscart import Product
-from aus_cartwatch.tracking import observe
+from aus_cart_mcp.watch import analytics
+from aus_cart_mcp.watch.auscart import Product
+from aus_cart_mcp.watch.tracking import observe
 from tests.conftest import T0
 
 

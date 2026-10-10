@@ -1,7 +1,7 @@
 """Telegram notifier and button handler, over the plain Bot API.
 
 Messages go to every allowed chat id, with inline buttons (add 1 / add 2 /
-snooze). aus_cartwatch is tailnet-only, so Telegram cannot reach a webhook:
+snooze). aus_cart_mcp.watch is tailnet-only, so Telegram cannot reach a webhook:
 button presses are read by long-polling `getUpdates`. Updates from any chat not
 on the allow-list are ignored. The bot token is a secret: it is never logged
 (it appears in the request path, so request logging stays off for this client).

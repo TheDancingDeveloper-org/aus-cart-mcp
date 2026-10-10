@@ -1,6 +1,6 @@
 import json
 
-from aus_cartwatch.__main__ import main
+from aus_cart_mcp.watch.__main__ import main
 
 
 def test_db_commands(tmp_path, monkeypatch, capsys):

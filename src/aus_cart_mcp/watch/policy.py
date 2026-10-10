@@ -1,7 +1,7 @@
 """Household preferences, stored in the `settings` table with these defaults.
 
 The owner changes them from the web UI (`/settings`); deployment facts and
-secrets stay in the environment (`aus_cartwatch.config`).
+secrets stay in the environment (`aus_cart_mcp.watch.config`).
 """
 
 from __future__ import annotations

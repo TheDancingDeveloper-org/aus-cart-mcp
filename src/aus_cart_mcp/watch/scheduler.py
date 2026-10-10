@@ -3,7 +3,7 @@
 The budget is enforced here, in code (docs/DESIGN.md § Traffic budget):
 
 - no retailer traffic in the no-runs window (default 23:00–05:00 local);
-- aus_cartwatch's own daily cap, counted from the ledger: a call that would
+- aus_cart_mcp.watch's own daily cap, counted from the ledger: a call that would
   exceed it is not started, and the run ends `partial`;
 - the shared-tenant guard: `usage_summary` before each run, skip when the tenant
   has used more than `SHARED_CAP_FRACTION` of the gateway's daily cap;
@@ -29,9 +29,9 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from aus_cart_mcp.watch import alerts, config, detect, tracking
-from aus_cart_mcp.watch.types import AusCartClient, AusCartError, Blocked, SessionRequired, Unavailable
 from aus_cart_mcp.watch.policy import Policy, in_window
 from aus_cart_mcp.watch.store import Store, parse_time, utcnow
+from aus_cart_mcp.watch.types import AusCartClient, AusCartError, Blocked, SessionRequired, Unavailable
 
 log = logging.getLogger(__name__)
 

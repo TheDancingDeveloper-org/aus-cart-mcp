@@ -19,8 +19,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from aus_cart_mcp.watch import analytics, config
-from aus_cart_mcp.watch.types import AusCartClient, AusCartError, Cart, Product
 from aus_cart_mcp.watch.store import Store, parse_time
+from aus_cart_mcp.watch.types import AusCartClient, AusCartError, Cart, Product
 
 log = logging.getLogger(__name__)
 

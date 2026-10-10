@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from aus_cart_mcp.watch.types import Cart, Product
 from aus_cart_mcp.watch.policy import Policy
 from aus_cart_mcp.watch.store import Store, parse_time, utcnow
 from aus_cart_mcp.watch.tracking import Tracker, TrackResult
+from aus_cart_mcp.watch.types import Cart, Product
 
 EPISODES_CONSIDERED = 6
 MIN_EPISODES_SEEN = 2

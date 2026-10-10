@@ -1,4 +1,4 @@
-"""`python -m aus_cartwatch serve` runs the service; the other commands are for the operator.
+"""`python -m aus_cart_mcp.watch serve` runs the service; the other commands are for the operator.
 
 serve                       run the HTTP + MCP server, scheduler and Telegram buttons
 auscart status              aus-cart-mcp: retailer, session and today's usage
@@ -145,7 +145,7 @@ async def _telegram(action: str) -> int:
             lines = await bot.check()
             print("\n".join(lines))
             return 0 if all("NOT reachable" not in line for line in lines) else 1
-        await bot.send(Message("operator", "aus_cartwatch: test message, alerts will arrive here.", []))
+        await bot.send(Message("operator", "aus_cart_mcp.watch: test message, alerts will arrive here.", []))
         print("sent")
         return 0
     except TelegramError as exc:
@@ -156,7 +156,7 @@ async def _telegram(action: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    parser = argparse.ArgumentParser(prog="aus_cartwatch")
+    parser = argparse.ArgumentParser(prog="aus_cart_mcp.watch")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("serve", help="run the HTTP + MCP server")
     auscart = sub.add_parser("auscart", help="talk to aus-cart-mcp")

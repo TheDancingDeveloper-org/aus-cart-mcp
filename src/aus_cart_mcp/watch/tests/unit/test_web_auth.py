@@ -1,4 +1,4 @@
-from aus_cartwatch.web import auth, chart, sparkline
+from aus_cart_mcp.watch.web import auth, chart, sparkline
 
 
 def test_password_hash_roundtrip():

@@ -1,10 +1,10 @@
-"""MVP1 flows end to end: aus_cartwatch → real aus-cart-mcp → mock Woolworths, alerts through a fake Telegram."""
+"""MVP1 flows end to end: aus_cart_mcp.watch → real aus-cart-mcp → mock Woolworths, alerts through a fake Telegram."""
 
 import httpx
 
-from aus_cartwatch import budget
-from aus_cartwatch.alerts.telegram import TelegramNotifier
-from aus_cartwatch.service import Service
+from aus_cart_mcp.watch import budget
+from aus_cart_mcp.watch.alerts.telegram import TelegramNotifier
+from aus_cart_mcp.watch.service import Service
 from tests.unit.test_notifiers import TOKEN, FakeBot, press
 
 MILK, CHOC = "888140", "6073909"
@@ -134,7 +134,7 @@ async def test_a_refused_photo_does_not_block_the_cart(aus_cart, store, clock, m
     await service.search("full cream milk")
     aus_cart.block()
     async with service.client() as client:
-        from aus_cartwatch.tracking import Tracker
+        from aus_cart_mcp.watch.tracking import Tracker
 
         assert not await Tracker(store, client, "woolworths").ensure_image(MILK)
     aus_cart.block(False)

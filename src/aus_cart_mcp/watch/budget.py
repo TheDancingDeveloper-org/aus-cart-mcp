@@ -1,7 +1,7 @@
 """The traffic budget: every aus-cart-mcp call is written to the ledger, and the governor reads it back.
 
 `ledger_hook` binds an `AusCartClient` to the ledger. The governor itself (daily
-cap, shared-tenant guard, blocked backoff) is in `aus_cartwatch.scheduler`.
+cap, shared-tenant guard, blocked backoff) is in `aus_cart_mcp.watch.scheduler`.
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ from collections.abc import Callable
 from datetime import datetime
 
 from aus_cart_mcp.watch import config
-from aus_cart_mcp.watch.types import AusCartClient, OnCall
 from aus_cart_mcp.watch.store import Store, utcnow
+from aus_cart_mcp.watch.types import AusCartClient, OnCall
 
 
 def ledger_hook(

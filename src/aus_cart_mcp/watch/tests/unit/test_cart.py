@@ -1,5 +1,5 @@
-from aus_cartwatch import cart
-from aus_cartwatch.auscart import Blocked, RetailerError
+from aus_cart_mcp.watch import cart
+from aus_cart_mcp.watch.auscart import Blocked, RetailerError
 
 R = "woolworths"
 
