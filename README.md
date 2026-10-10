@@ -22,6 +22,7 @@ retailer.
 
   | Tool | What it does |
   |---|---|
+  | `server_info` | the enabled layers and the retailers |
   | `list_retailers` | the retailer index |
   | `search_products` | search a retailer's catalogue |
   | `get_cart` | show the cart |
@@ -44,6 +45,24 @@ retailer.
   number of upstream requests it made, which is the basis for pay-per-use.
 - **Sign in on the retailer's site.** Customers sign in on the retailer's own site, on
   their own device, and the resulting session cookies are handed over.
+
+## Feature layers
+
+One image, three layers, chosen at runtime by `AUS_CART_MCP_FEATURES`
+(default `core`). `ui` implies `watch`. Sub-flags `telegram` and `receipts`
+do nothing until their layer ships.
+
+| Layer | Extra | What it adds | Default |
+|---|---|---|---|
+| `core` | (always installed) | search and the customer's own cart | on |
+| `watch` | `[watch]` | price tracking, history, alerts | off |
+| `ui` | `[ui]` | the cartwatch pages at `/ui` | off |
+
+`core` never imports `watch` or `ui`; `watch` never imports `ui`. `watch`
+records are keyed by (tenant, retailer). See [docs/DESIGN.md](docs/DESIGN.md).
+
+`server_info` and `GET /healthz` report the enabled layers and the retailers.
+With `ui` off, `/ui` answers 404.
 
 ## Quick start
 

@@ -48,6 +48,9 @@ async def test_health_is_open_and_mcp_needs_a_valid_key(base_url, store):
     async with httpx.AsyncClient() as http:
         health = (await http.get(f"{base_url}/healthz")).json()
         assert health["ok"] is True and health["retailers"] == ["woolworths"]
+        assert health["features"] == {"layers": ["core"], "flags": []}
+        ui = await http.get(f"{base_url}/ui")
+        assert ui.status_code == 404 and ui.json()["error"] == "ui layer is not enabled"
         assert (await http.post(f"{base_url}/mcp", json={})).status_code == 401
         assert (
             await http.post(f"{base_url}/mcp", json={}, headers={"Authorization": "Bearer acm_nope"})
@@ -66,6 +69,7 @@ async def test_tool_list_and_retailer_index(base_url, store):
     async with client(base_url, key) as c:
         names = {t.name for t in (await c.list_tools()).tools}
         assert {
+            "server_info",
             "list_retailers",
             "search_products",
             "get_cart",
@@ -80,6 +84,9 @@ async def test_tool_list_and_retailer_index(base_url, store):
             "add_to_trolley",
             "set_trolley_quantities",
         } <= names
+        info = json.loads(text(await c.call_tool("server_info", {})))
+        assert info["features"] == {"layers": ["core"], "flags": []}
+        assert info["retailers"] == ["woolworths"]
         supported = json.loads(text(await c.call_tool("list_retailers", {})))
         assert [r["key"] for r in supported] == ["woolworths"]
         everyone = json.loads(text(await c.call_tool("list_retailers", {"include_planned": True})))

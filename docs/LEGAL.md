@@ -51,6 +51,15 @@ Take legal advice before charging anyone.
 - Customer sessions are encrypted at rest, and API keys are stored only as hashes.
 - Every tool call is metered per customer.
 
+## Scheduled traffic (the watch layer)
+
+The `watch` layer, off unless `AUS_CART_MCP_FEATURES` names it, originates
+scheduled requests of its own: price refreshes and alert checks, not only
+requests a person just asked for. That traffic is budgeted per tenant and per
+retailer, and it stops when a retailer blocks us. It is the customer's own
+data being re-read on a schedule they turned on, and it carries the same
+obligations as any other request this service makes.
+
 ## No warranty
 
 This software is provided as is, under the [AGPL-3.0](../LICENSE), with no
