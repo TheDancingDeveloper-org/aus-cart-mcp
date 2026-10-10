@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Settings</h1>
+<div class="card">
+  <p><strong>Budget today:</strong> {{ status.upstream_today }} of {{ status.daily_cap }} upstream requests.
+  {% if status.last_refresh %}Last refresh {{ status.last_refresh.started_at|when }}: {{ status.last_refresh.outcome }} {{ status.last_refresh.note }}.{% endif %}
+  {% if status.blocked_backoff %}<br><strong>{{ status.blocked_backoff }}</strong>{% endif %}</p>
+  <p class="muted">Alerts go to: {{ notifiers|join(', ') or 'nowhere (no notifier configured)' }}{% if chat_count %} · {{ chat_count }} Telegram chat(s){% endif %}.</p>
+  <form class="inline" method="post" action="/runs/refresh"><button>Refresh prices now</button></form> <a href="/runs">Runs and ledger</a>
+</div>
+<form method="post" action="/settings" class="card">
+  {% for name, label in [
+    ('refresh_times', 'Refresh times (local, comma-separated)'), ('specials_day', 'Extra run on weekday (Mon=0, Wed=2, -1 = none)'), ('specials_time', 'Specials run time'),
+    ('jitter_minutes', 'Jitter (minutes)'), ('no_runs_start', 'No traffic from'), ('no_runs_end', 'No traffic until'),
+    ('scheduled_snapshots', 'Scheduled cart reads (1 = on, 0 = only from the Cart page)'), ('snapshot_minutes_active', 'Cart snapshot every (min, cart in use)'), ('snapshot_minutes_idle', 'Cart snapshot every (min, cart empty)'),
+    ('max_searches_per_run', 'Max lookups per run'), ('discount_threshold', 'Heavy discount (fraction)'),
+    ('quiet_start', 'Quiet hours from'), ('quiet_end', 'Quiet hours until'), ('digest_time', 'On-sale digest at')] %}
+  <p><label>{{ label }}<br><input name="{{ name }}" value="{{ policy[name] }}"></label></p>
+  {% endfor %}
+  <button class="primary" type="submit">Save settings</button>
+</form>
+<form method="post" action="/logout"><button>Sign out</button></form>
+{% endblock %}

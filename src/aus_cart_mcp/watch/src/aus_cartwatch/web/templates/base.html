@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}aus_cartwatch{% endblock %}</title>
+<style>
+:root { --bg:#fbfaf7; --fg:#1d1c1a; --muted:#6b6862; --line:#e4e1da; --card:#fff; --accent:#1f7a4d; --hot:#c2410c; --warn:#a16207; }
+@media (prefers-color-scheme: dark) { :root { --bg:#151514; --fg:#ecebe7; --muted:#a19e97; --line:#2c2b29; --card:#1e1d1b; --accent:#4ade80; --hot:#fb923c; --warn:#facc15; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { position:sticky; top:0; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; z-index:1; }
+header strong { margin-right:auto; }
+header a { color:var(--muted); text-decoration:none; }
+header a.on { color:var(--fg); font-weight:600; }
+main { max-width:860px; margin:0 auto; padding:16px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.grow { flex:1 1 200px; min-width:0; }
+.name { font-weight:600; overflow-wrap:anywhere; }
+.muted { color:var(--muted); font-size:14px; }
+.price { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+.badge { display:inline-block; border-radius:999px; padding:1px 8px; font-size:13px; border:1px solid var(--line); }
+.badge.sale { color:var(--accent); border-color:var(--accent); }
+.badge.hot { background:var(--hot); color:#fff; border-color:var(--hot); }
+.badge.target { color:var(--warn); border-color:var(--warn); }
+.thumb { width:64px; height:64px; object-fit:contain; border-radius:8px; background:#fff; flex:0 0 64px; }
+.thumb.empty { display:inline-block; border:1px dashed var(--line); background:transparent; }
+.photo { width:160px; height:160px; object-fit:contain; border-radius:12px; background:#fff; }
+.pick { display:flex; gap:10px; align-items:center; cursor:pointer; }
+.pick input[type=checkbox] { width:22px; height:22px; flex:0 0 22px; }
+.sticky-actions { position:sticky; bottom:0; background:var(--bg); padding:10px 0; border-top:1px solid var(--line); }
+.spark, .chart { color:var(--accent); }
+.chart { width:100%; height:auto; }
+.chart .special { fill:var(--hot); }
+.chart .axis { fill:var(--muted); font-size:11px; }
+form.inline { display:inline-flex; gap:6px; align-items:center; margin:0; }
+input, select, button { font:inherit; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
+input[type=number] { width:5.5em; }
+button { cursor:pointer; }
+button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+@media (prefers-color-scheme: dark) { button.primary { color:#0b0b0a; } }
+.flash { background:var(--card); border-left:4px solid var(--accent); padding:10px 12px; margin-bottom:12px; border-radius:6px; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th, td { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+.scroll { overflow-x:auto; }
+a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <strong>aus_cartwatch</strong>
+  <a href="/" class="{{ 'on' if nav == 'index' }}">Tracked</a>
+  <a href="/deals" class="{{ 'on' if nav == 'deals' }}">Deals</a>
+  <a href="/alerts" class="{{ 'on' if nav == 'alerts' }}">Alerts</a>
+  <a href="/cart" class="{{ 'on' if nav == 'cart' }}">Cart</a>
+  <a href="/candidates" class="{{ 'on' if nav == 'candidates' }}">Suggestions</a>
+  <a href="/track" class="{{ 'on' if nav == 'track' }}">Track</a>
+  <a href="/receipts" class="{{ 'on' if nav in ('receipts', 'receipt') }}">Receipts</a>
+  <a href="/settings" class="{{ 'on' if nav in ('settings', 'runs') }}">Settings</a>
+</header>
+<main>
+{% if flash %}<div class="flash" role="status">{{ flash }}</div>{% endif %}
+{% block content %}{% endblock %}
+<p class="muted">aus_cartwatch {{ version }} · prices come from Woolworths through aus-cart-mcp and may be out of date.</p>
+</main>
+</body>
+</html>
