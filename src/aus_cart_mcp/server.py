@@ -232,6 +232,12 @@ def build(
         """This account's metered usage: tool calls and upstream requests over the last N days."""
         return result(await core.usage(await tenant_of(ctx), max(1, min(days, 366))))
 
+    if selected.has("watch"):
+        # Lazy: core must not import the watch package unless the flag is on.
+        from aus_cart_mcp.watch.register import register as register_watch
+
+        register_watch(mcp, tool, store, gateway)
+
     return mcp, gateway
 
 
