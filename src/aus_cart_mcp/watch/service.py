@@ -12,12 +12,12 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
-from aus_cartwatch import alerts, budget, cart, config, detect, receipts, tracking
-from aus_cartwatch.alerts.telegram import TelegramNotifier
-from aus_cartwatch.alerts.webhook import WebhookNotifier
-from aus_cartwatch.auscart import AusCartClient
-from aus_cartwatch.scheduler import Scheduler
-from aus_cartwatch.store import Store, utcnow
+from aus_cart_mcp.watch import alerts, budget, cart, config, detect, receipts, tracking
+from aus_cart_mcp.watch.alerts.telegram import TelegramNotifier
+from aus_cart_mcp.watch.alerts.webhook import WebhookNotifier
+from aus_cart_mcp.watch.types import AusCartClient
+from aus_cart_mcp.watch.scheduler import Scheduler
+from aus_cart_mcp.watch.store import Store, utcnow
 
 log = logging.getLogger(__name__)
 

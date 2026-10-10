@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from statistics import median
 
-from aus_cartwatch.store import Store, parse_time, utcnow
+from aus_cart_mcp.watch.store import Store, parse_time, utcnow
 
 BASELINE_WINDOW_DAYS = 60
 MIN_OBSERVATIONS = 3

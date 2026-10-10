@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import httpx
 
-from aus_cartwatch.alerts import Message
+from aus_cart_mcp.watch.alerts import Message
 
 
 class WebhookNotifier:

@@ -24,10 +24,10 @@ from datetime import datetime, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
-from aus_cartwatch import config
-from aus_cartwatch.analytics import DEFAULT_THRESHOLD
-from aus_cartwatch.policy import Policy, in_window
-from aus_cartwatch.store import Store, parse_time, utcnow
+from aus_cart_mcp.watch import config
+from aus_cart_mcp.watch.analytics import DEFAULT_THRESHOLD
+from aus_cart_mcp.watch.policy import Policy, in_window
+from aus_cart_mcp.watch.store import Store, parse_time, utcnow
 
 log = logging.getLogger(__name__)
 

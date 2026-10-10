@@ -28,6 +28,19 @@ from typing import Any
 
 MIGRATION_NAME = re.compile(r"^(\d{4})_[a-z0-9_]+\.sql$")
 SOURCES = ("manual", "cart", "receipt", "order", "email")
+# Tables that belong to one tenant. `settings` is process-wide and stays unscoped.
+_TENANT_SQL = re.compile(
+    r"\b(?:products|tracked_items|observations|cart_snapshots|shop_episodes|candidate_decisions|"
+    r"sale_episodes|alerts|runs|budget_ledger|cart_actions|item_stats|search_cache|product_images|"
+    r"receipts|receipt_lines|receipt_aliases|watch_settings)\b",
+    re.I,
+)
+_INSERT_COLS = re.compile(
+    r"\b(INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(?:products|tracked_items|observations|cart_snapshots|"
+    r"shop_episodes|candidate_decisions|sale_episodes|alerts|runs|budget_ledger|cart_actions|"
+    r"item_stats|search_cache|product_images|receipts|receipt_lines|receipt_aliases|watch_settings))\s*\(",
+    re.I,
+)
 
 
 def utcnow() -> datetime:
@@ -52,7 +65,7 @@ class Migration:
 def bundled_migrations() -> list[Migration]:
     """The migrations shipped in the package, in version order."""
     out = []
-    for entry in resources.files("aus_cartwatch.migrations").iterdir():
+    for entry in resources.files("aus_cart_mcp.watch.migrations").iterdir():
         match = MIGRATION_NAME.match(entry.name)
         if match:
             out.append(Migration(int(match.group(1)), entry.name, entry.read_text(encoding="utf-8")))
@@ -64,8 +77,9 @@ def bundled_migrations() -> list[Migration]:
 
 
 class Store:
-    def __init__(self, path: str | Path, migrations: list[Migration] | None = None):
+    def __init__(self, path: str | Path, migrations: list[Migration] | None = None, *, tenant_id: str = ""):
         self.path = Path(path)
+        self.tenant_id = str(tenant_id)
         self.migrations = bundled_migrations() if migrations is None else migrations
         self._db: sqlite3.Connection | None = None
         self._lock = threading.RLock()
@@ -92,16 +106,52 @@ class Store:
             self._db.close()
             self._db = None
 
+    def _scoped(self, sql: str, params: Iterable[Any]) -> tuple[str, tuple]:
+        """Stamp every tenant-owned statement with this store's tenant.
+
+        Household settings stay global. Everything else is invisible across tenants,
+        including rows written before a tenant was known (they keep the default '').
+        """
+        if not _TENANT_SQL.search(sql):
+            return sql, tuple(params)
+        tid = self.tenant_id
+        out = sql
+        vals = list(params)
+        # INSERT column lists: tenant_id is the first column and the first value.
+        def _insert(match: re.Match) -> str:
+            return f"{match.group(1)}(tenant_id, "
+
+        out = _INSERT_COLS.sub(_insert, out)
+        if out != sql:
+            vals.insert(0, tid)
+            out = re.sub(r"\bVALUES\s*\(", "VALUES (?, ", out, count=1, flags=re.I)
+        # Conflict targets and join keys name the tenant explicitly.
+        out = out.replace("ON CONFLICT (", "ON CONFLICT (tenant_id, ")
+        out = out.replace("USING (", "USING (tenant_id, ")
+        # Reads and updates filter on it. INSERT...SELECT settings copies are not filtered.
+        if not out.lstrip().upper().startswith("INSERT"):
+            vals.append(tid)
+            if re.search(r"\bWHERE\b", out, re.I):
+                out = re.sub(r"\bWHERE\b", "WHERE tenant_id = ? AND", out, count=1, flags=re.I)
+            else:
+                out += " WHERE tenant_id = ?"
+        elif "SELECT" in out.upper() and "WHERE" not in out.upper():
+            pass
+        return out, tuple(vals)
+
     def _all(self, sql: str, params: Iterable[Any] = ()) -> list[dict]:
+        sql, params = self._scoped(sql, params)
         with self._lock:
             return [dict(row) for row in self.db.execute(sql, tuple(params)).fetchall()]
 
     def _one(self, sql: str, params: Iterable[Any] = ()) -> dict | None:
+        sql, params = self._scoped(sql, params)
         with self._lock:
             row = self.db.execute(sql, tuple(params)).fetchone()
         return dict(row) if row is not None else None
 
     def _exec(self, sql: str, params: Iterable[Any] = ()) -> sqlite3.Cursor:
+        sql, params = self._scoped(sql, params)
         with self._lock:
             return self.db.execute(sql, tuple(params))
 
@@ -214,7 +264,7 @@ class Store:
 
     def cached_product(self, retailer: str, product_id: str, *, max_age: timedelta, now: datetime | None = None):
         """The product as last seen, if seen within `max_age` (else None)."""
-        from aus_cartwatch.auscart import Product
+        from aus_cart_mcp.watch.types import Product
 
         row = self.get_product(retailer, product_id)
         if row is None or not row.get("snapshot_at"):

@@ -24,8 +24,8 @@ import json
 import logging
 import sys
 
-from aus_cartwatch import analytics, budget, config, detect, tracking
-from aus_cartwatch.store import Store
+from aus_cart_mcp.watch import analytics, budget, config, detect, tracking
+from aus_cart_mcp.watch.store import Store
 
 
 def _store() -> Store:
@@ -57,7 +57,7 @@ async def _auscart_status(store: Store) -> int:
 
 
 async def _track(store: Store, args: argparse.Namespace) -> int:
-    from aus_cartwatch.service import Service
+    from aus_cart_mcp.watch.service import Service
 
     service = Service(store, notifiers=[])
     if args.from_cart:
@@ -112,7 +112,7 @@ def _stats(store: Store, product_id: str) -> int:
 
 
 async def _refresh(store: Store, force: bool) -> int:
-    from aus_cartwatch.service import Service
+    from aus_cart_mcp.watch.service import Service
 
     result = await Service(store, notifiers=[]).scheduler.refresh(force=force, note="manual (cli)")
     print(f"{result.run_id}: {result.outcome} {result.note} (observed {result.observed})")
@@ -120,7 +120,7 @@ async def _refresh(store: Store, force: bool) -> int:
 
 
 async def _add(store: Store, product_id: str, quantity: float) -> int:
-    from aus_cartwatch.service import Service
+    from aus_cart_mcp.watch.service import Service
 
     outcome = await Service(store, notifiers=[]).add_to_cart(product_id, quantity, reason="cli")
     print(outcome.message)
@@ -128,8 +128,8 @@ async def _add(store: Store, product_id: str, quantity: float) -> int:
 
 
 async def _telegram(action: str) -> int:
-    from aus_cartwatch.alerts import Message
-    from aus_cartwatch.alerts.telegram import TelegramError, TelegramNotifier
+    from aus_cart_mcp.watch.alerts import Message
+    from aus_cart_mcp.watch.alerts.telegram import TelegramError, TelegramNotifier
 
     if not config.telegram_token():
         print(
@@ -198,12 +198,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "serve":
         import uvicorn
 
-        from aus_cartwatch.server import create_app
+        from aus_cart_mcp.watch.server import create_app
 
         uvicorn.run(create_app(), host=config.host(), port=config.port(), log_level="info")
         return 0
     if args.cmd == "hash-password":
-        from aus_cartwatch.web.auth import hash_password
+        from aus_cart_mcp.watch.web.auth import hash_password
 
         password = getpass.getpass("password: ") if sys.stdin.isatty() else sys.stdin.readline().rstrip("\n")
         if len(password) < 8:

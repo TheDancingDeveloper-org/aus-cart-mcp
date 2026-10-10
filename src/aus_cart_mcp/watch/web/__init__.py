@@ -18,14 +18,14 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
-from aus_cartwatch import __version__, config, detect, receipts, tracking
-from aus_cartwatch.alerts import describe as describe_alert
-from aus_cartwatch.policy import Policy
-from aus_cartwatch.store import parse_time, utcnow
-from aus_cartwatch.web import auth
+from aus_cart_mcp.watch import __version__, config, detect, receipts, tracking
+from aus_cart_mcp.watch.alerts import describe as describe_alert
+from aus_cart_mcp.watch.policy import Policy
+from aus_cart_mcp.watch.store import parse_time, utcnow
+from aus_cart_mcp.watch.web import auth
 
 if TYPE_CHECKING:
-    from aus_cartwatch.service import Service
+    from aus_cart_mcp.watch.service import Service
 
 WOOLWORTHS_IMAGES = "https://cdn0.woolworths.media/content/wowproductimages/medium"
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -234,7 +234,7 @@ def routes(service: Service) -> list[Route]:
                 tracking.set_threshold(store, row["retailer"], row["product_id"], float(value) / 100 if value else None)
                 return back(target, "Threshold saved")
             if action == "snooze":
-                from aus_cartwatch.cart import snooze
+                from aus_cart_mcp.watch.cart import snooze
 
                 return back(target, snooze(store, row["retailer"], row["product_id"]))
             if action == "untrack":
@@ -352,7 +352,7 @@ def routes(service: Service) -> list[Route]:
             except (ValueError, TypeError) as exc:
                 return back("/settings", f"Not saved: {exc}")
             return back("/settings", "Settings saved")
-        from aus_cartwatch.server import status_payload
+        from aus_cart_mcp.watch.server import status_payload
 
         return page(
             request,
