@@ -1,6 +1,6 @@
 [project]
 name = "aus-cart-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "MCP server: search Australian retailers and manage your own online cart (Woolworths first). Multi-tenant and metered."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -13,6 +13,13 @@ dependencies = [
     "uvicorn>=0.32",
     "starlette>=0.40",
 ]
+
+[project.optional-dependencies]
+# The watch layer's own dependencies land with the subtree. The extra exists now
+# so installs and CI can select the layer before it has any.
+watch = []
+# The cartwatch pages: templates, form uploads, and the receipt/Telegram extras.
+ui = ["jinja2>=3.1", "python-multipart>=0.0.9"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "pytest-cov>=5", "ruff>=0.8"]
