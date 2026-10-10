@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Alerts</h1>
+<p class="muted">{% if notifiers %}Sent to: {{ notifiers|join(', ') }}.{% else %}No notifier is configured (the Telegram bot is deferred), so alerts wait here: act on them from this page.{% endif %}</p>
+{% if not alerts %}<p>No alerts yet. They appear when a tracked item goes on sale, drops 30% or more, or reaches its target price.</p>{% endif %}
+{% for a in alerts %}
+<div class="card">
+  <div class="row">
+    {% if a.product_id %}{% set src = photo_src(a.retailer, a.product_id) %}{% if src %}<img class="thumb" src="{{ src }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}{% endif %}
+    <div class="grow">
+      <span class="badge {{ 'hot' if a.kind == 'heavy_discount' else ('target' if a.kind == 'target_price' else 'sale') }}">{{ a.kind|replace('_', ' ') }}</span>
+      <span class="muted">{{ a.created_at|when }} · {% if a.channel == 'superseded' %}folded into the heavy-discount alert{% elif a.sent_at %}sent via {{ a.channel }}{% else %}not sent{% endif %}{% if a.acted_at %} · acted on {{ a.acted_at|when }}{% endif %}</span>
+      <div style="white-space:pre-line">{{ a.text }}</div>
+    </div>
+  </div>
+  {% if a.product_id and a.kind != 'operator' %}
+  <div class="row" style="margin-top:8px">
+    <form class="inline" method="post" action="/alerts/{{ a.id }}/add"><input type="number" name="quantity" value="1" min="1" max="6" aria-label="quantity"><button class="primary">Add to cart</button></form>
+    <form class="inline" method="post" action="/alerts/{{ a.id }}/snooze"><button>Snooze 4 weeks</button></form>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

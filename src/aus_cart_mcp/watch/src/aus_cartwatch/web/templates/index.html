@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row" style="justify-content:space-between"><h1>Tracked items</h1><a href="/track">+ Track an item</a></div>
+{% if not items %}<p>Nothing tracked yet. <a href="/track">Track an item</a> or look at the <a href="/candidates">suggestions</a>.</p>{% endif %}
+{% for item in items %}{% set s = item.stats %}
+<div class="card">
+  <div class="row">
+    {% set src = photo_src(item.retailer, item.product_id, item.image_url) %}{% if src %}<img class="thumb" src="{{ src }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="thumb empty"></span>{% endif %}
+    <div class="grow">
+      <a class="name" href="/items/{{ item.id }}">{{ item.label or item.name }}</a> <span class="muted">{{ item.size }}</span><br>
+      {% if s.heavy %}<span class="badge hot">{{ s.discount|percent }} off</span>{% elif s.on_sale %}<span class="badge sale">on sale{% if s.discount %} · {{ s.discount|percent }} off{% endif %}</span>{% endif %}
+      {% if s.target_met %}<span class="badge target">target met</span>{% endif %}
+      <span class="muted">{% if s.baseline %}usually {{ s.baseline|money }}{% endif %}{% if s.unit_price_value %} · ${{ '%.2f'|format(s.unit_price_value) }} / {{ s.unit_price_unit }}{% endif %} · seen {{ s.observed_at|when }}</span>
+    </div>
+    {{ item.spark|safe }}
+    <div class="price">{{ s.price|money }}</div>
+  </div>
+  <div class="row" style="margin-top:8px">{% set next = '/' %}{% include "_add.html" %}</div>
+</div>
+{% endfor %}
+{% endblock %}
