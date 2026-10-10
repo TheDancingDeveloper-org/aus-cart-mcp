@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ item.label or item.name }} · aus_cartwatch{% endblock %}
+{% block content %}
+<h1>{{ item.label or item.name }} <span class="muted">{{ item.size }}</span></h1>
+<div class="card">
+  {% set src = photo_src(item.retailer, item.product_id, item.image_url) %}{% if src %}<img class="photo" src="{{ src }}" alt="{{ item.name }}" referrerpolicy="no-referrer">{% endif %}
+  <div class="row"><div class="price">{{ stats.price|money }}</div>
+    {% if stats.heavy %}<span class="badge hot">{{ stats.discount|percent }} off</span>{% elif stats.on_sale %}<span class="badge sale">on sale</span>{% endif %}
+    {% if stats.target_met %}<span class="badge target">target met</span>{% endif %}
+    <span class="muted">usually {{ stats.baseline|money }}{% if stats.unit_price_value %} · ${{ '%.2f'|format(stats.unit_price_value) }} / {{ stats.unit_price_unit }}{% endif %}</span>
+  </div>
+  {{ chart|safe }}
+  <p class="muted">
+    {% for label, w in [('7 days', stats.d7), ('30 days', stats.d30), ('90 days', stats.d90)] %}{% if w %}{{ label }}: {{ w.min|money }}–{{ w.max|money }} (median {{ w.median|money }}). {% endif %}{% endfor %}
+    {% if stats.sales %}{{ stats.sales }} sales{% if stats.avg_days_between_sales %}, about every {{ stats.avg_days_between_sales }} days{% endif %}{% if stats.typical_sale_price %}, typically {{ stats.typical_sale_price|money }}{% endif %}.{% endif %}
+    {% if item.url %}<a href="{{ item.url }}" rel="noreferrer">On Woolworths</a>{% endif %}
+  </p>
+  <div class="row">{% set next = '/items/' ~ item.id %}{% include "_add.html" %}</div>
+</div>
+<div class="card">
+  <form class="inline" method="post" action="/items/{{ item.id }}/target"><label>Target $ <input type="number" step="0.01" min="0" name="target_price" value="{{ item.target_price or '' }}"></label><button>Save</button></form>
+  <form class="inline" method="post" action="/items/{{ item.id }}/threshold"><label>Heavy at % <input type="number" min="1" max="99" name="threshold" value="{{ ((item.discount_threshold or 0) * 100)|round|int or '' }}" placeholder="{{ (stats.threshold * 100)|round|int if stats.threshold }}"></label><button>Save</button></form>
+  <form class="inline" method="post" action="/items/{{ item.id }}/snooze"><button>Snooze alerts 4 weeks</button></form>
+  <form class="inline" method="post" action="/items/{{ item.id }}/untrack"><button>Stop tracking</button></form>
+  {% if item.snoozed_until %}<p class="muted">Snoozed until {{ item.snoozed_until|when }}.</p>{% endif %}
+</div>
+<h2>Sales</h2>
+<div class="scroll"><table><tr><th>From</th><th>To</th><th class="num">Low</th><th class="num">Usual</th><th class="num">Off</th></tr>
+{% for e in episodes %}<tr><td>{{ e.started_at|when }}</td><td>{{ e.ended_at|when if e.ended_at else 'now' }}</td><td class="num">{{ e.low_price|money }}</td><td class="num">{{ e.baseline|money }}</td><td class="num">{{ e.max_discount|percent }}</td></tr>{% else %}<tr><td colspan="5" class="muted">None seen yet.</td></tr>{% endfor %}
+</table></div>
+<h2>Recent prices</h2>
+<div class="scroll"><table><tr><th>When</th><th class="num">Price</th><th class="num">Was</th><th>Special</th></tr>
+{% for o in observations %}<tr><td>{{ o.observed_at|when }}</td><td class="num">{{ o.price|money }}</td><td class="num">{{ o.was_price|money }}</td><td>{{ 'yes' if o.on_special }}</td></tr>{% endfor %}
+</table></div>
+<h2>Cart actions</h2>
+<div class="scroll"><table><tr><th>When</th><th class="num">Qty</th><th>From</th><th>Result</th></tr>
+{% for a in actions %}<tr><td>{{ a.at|when }}</td><td class="num">{{ a.quantity|round(1) }}</td><td>{{ a.reason }}</td><td>{{ a.message }}</td></tr>{% else %}<tr><td colspan="4" class="muted">None.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

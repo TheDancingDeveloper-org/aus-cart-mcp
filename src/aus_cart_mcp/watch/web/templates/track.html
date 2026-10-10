@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Track an item</h1>
+<form method="post" action="/track" class="row">
+  <input class="grow" name="reference" value="{{ query }}" placeholder="search, product id or Woolworths link" aria-label="search, product id or product link" required>
+  <button class="primary" type="submit">Find</button>
+</form>
+{% if candidates %}
+<h2>Pick what to track</h2>
+<p class="muted">{% if from_cache %}Shown from the local cache (searched recently): no request to Woolworths.{% else %}Fresh from Woolworths; kept for a day, so tracking from here costs nothing more.{% endif %}</p>
+<form method="post" action="/track/selected">
+{% for p in candidates %}
+<label class="card pick">
+  <input type="checkbox" name="product_id" value="{{ p.product_id }}" {{ 'disabled' if p.product_id in (tracked or ()) }}>
+  {% if p.image_url %}<img class="thumb" src="{{ p.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="thumb empty"></span>{% endif %}
+  <span class="grow"><span class="name">{{ p.name }}</span><br>
+    <span class="muted">{{ p.size }}{% if p.unit_price %} · {{ p.unit_price }}{% endif %}{% if p.on_special %} · on special{% endif %}{% if p.product_id in (tracked or ()) %} · already tracked{% endif %}</span></span>
+  <span class="price">{{ p.price|money }}</span>
+</label>
+{% endfor %}
+{% for p in candidates %}{% if p.product_id not in (tracked or ()) %}<input type="hidden" name="all_product_id" value="{{ p.product_id }}">{% endif %}{% endfor %}
+<div class="sticky-actions row"><button class="primary" type="submit">Track selected</button>
+  <button type="submit" name="select" value="all">Track all {{ candidates|rejectattr('product_id', 'in', tracked or ())|list|length }}</button></div>
+</form>
+{% endif %}
+<h2>From the cart</h2>
+<form method="post" action="/track/cart"><button type="submit">Track everything in my cart</button></form>
+<p class="muted">A new search is one request to Woolworths through aus-cart-mcp and counts against the daily budget. Repeating it within a day, or tracking from its results, does not. Photos in search results load straight from Woolworths' image server in your browser; a tracked item's photo is fetched once and stored here.</p>
+{% endblock %}

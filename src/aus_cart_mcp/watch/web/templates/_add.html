@@ -1,0 +1,5 @@
+<form class="inline" method="post" action="/items/{{ item.id }}/add">
+  <input type="hidden" name="next" value="{{ next or '/' }}">
+  <input type="number" name="quantity" value="1" min="1" max="{{ max_quantity }}" aria-label="quantity">
+  <button class="primary" type="submit">Add to cart</button>
+</form>

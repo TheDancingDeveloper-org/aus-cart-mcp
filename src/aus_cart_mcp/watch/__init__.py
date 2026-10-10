@@ -1,7 +1,3 @@
-"""Layer 2: price tracking, history and alerts.
+"""aus_cart_mcp.watch: a household grocery price tracker built on aus-cart-mcp."""
 
-Off unless ``AUS_CART_MCP_FEATURES`` includes ``watch``. Empty until the
-aus-cartwatch subtree lands. Every record this layer keeps is keyed by
-(tenant, retailer): product ids are retailer-scoped, tools take a ``retailer``
-argument, and retailer constants live on the retailer adapter.
-"""
+__version__ = "0.1.0"

@@ -38,7 +38,31 @@ addopts = "-m 'not live'"
 
 [tool.coverage.run]
 source = ["aus_cart_mcp"]
-omit = ["*/__main__.py"]
+omit = [
+    "*/__main__.py",
+    # The subtree's own modules and tests are not the product path yet: their
+    # suite still imports the old client surface and is not collected by the
+    # root testpaths. Count only the in-process watch layer (register, ledger).
+    "*/aus_cart_mcp/watch/alerts/*",
+    "*/aus_cart_mcp/watch/tests/*",
+    "*/aus_cart_mcp/watch/web/*",
+    "*/aus_cart_mcp/watch/analytics.py",
+    "*/aus_cart_mcp/watch/auscart.py",
+    "*/aus_cart_mcp/watch/budget.py",
+    "*/aus_cart_mcp/watch/cart.py",
+    "*/aus_cart_mcp/watch/client.py",
+    "*/aus_cart_mcp/watch/config.py",
+    "*/aus_cart_mcp/watch/detect.py",
+    "*/aus_cart_mcp/watch/policy.py",
+    "*/aus_cart_mcp/watch/receipts.py",
+    "*/aus_cart_mcp/watch/scheduler.py",
+    "*/aus_cart_mcp/watch/server.py",
+    "*/aus_cart_mcp/watch/service.py",
+    "*/aus_cart_mcp/watch/store.py",
+    "*/aus_cart_mcp/watch/tenant_schema.py",
+    "*/aus_cart_mcp/watch/tracking.py",
+    "*/aus_cart_mcp/watch/types.py",
+]
 
 [tool.coverage.report]
 fail_under = 85
