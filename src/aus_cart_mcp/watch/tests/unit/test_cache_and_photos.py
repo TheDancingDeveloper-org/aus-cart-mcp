@@ -7,7 +7,7 @@ import pytest
 from aus_cart_mcp.watch.policy import Policy
 from aus_cart_mcp.watch.scheduler import Scheduler
 from aus_cart_mcp.watch.tracking import Tracker
-from tests.conftest import T0
+from aus_cart_mcp.watch.tests.conftest import T0
 
 R = "woolworths"
 

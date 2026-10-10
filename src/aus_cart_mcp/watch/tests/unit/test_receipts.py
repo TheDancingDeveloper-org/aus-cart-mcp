@@ -10,7 +10,7 @@ import pytest
 from aus_cart_mcp.watch import receipts
 from aus_cart_mcp.watch.auscart import Blocked, Product
 from aus_cart_mcp.watch.tracking import Tracker
-from tests.conftest import T0, FakeAusCart, product
+from aus_cart_mcp.watch.tests.conftest import T0, FakeAusCart, product
 
 R = "woolworths"
 SYNTHETIC = {

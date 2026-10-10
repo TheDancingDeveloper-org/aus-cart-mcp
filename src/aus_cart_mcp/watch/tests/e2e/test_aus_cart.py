@@ -7,7 +7,7 @@ from mcp.server.mcpserver import MCPServer
 
 from aus_cart_mcp.watch.auscart import AusCartClient, Blocked, RetailerError, SessionRequired
 from aus_cart_mcp.watch.budget import client as ledgered_client
-from tests.conftest import serve, stop
+from aus_cart_mcp.watch.tests.conftest import serve, stop
 
 MILK = "888140"
 

@@ -17,7 +17,7 @@ from aus_cart_mcp.watch.server import create_app, thin
 from aus_cart_mcp.watch.service import Service
 from aus_cart_mcp.watch.store import bundled_migrations
 from aus_cart_mcp.watch.web.auth import hash_password
-from tests.conftest import T0, serve, stop
+from aus_cart_mcp.watch.tests.conftest import T0, serve, stop
 
 KEY = "test-mcp-key"
 PASSWORD = "household password"
@@ -309,8 +309,8 @@ async def test_price_history_by_name(app_url, fake):
 async def test_receipt_upload_match_and_confirm(store, clock, tmp_path, monkeypatch):
     import asyncio
 
-    from tests.conftest import FakeAusCart, product
-    from tests.unit.test_receipts import fake_extractor
+    from aus_cart_mcp.watch.tests.conftest import FakeAusCart, product
+    from aus_cart_mcp.watch.tests.unit.test_receipts import fake_extractor
 
     monkeypatch.setenv("AUS_CARTWATCH_UI_PASSWORD_HASH", hash_password(PASSWORD))
     monkeypatch.setenv("AUS_CARTWATCH_SECRET", "cookie-secret")

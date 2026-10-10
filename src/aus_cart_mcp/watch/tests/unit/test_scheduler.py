@@ -7,7 +7,7 @@ import pytest
 from aus_cart_mcp.watch.auscart import Blocked, Unavailable
 from aus_cart_mcp.watch.policy import Policy
 from aus_cart_mcp.watch.scheduler import Scheduler
-from tests.conftest import FakeAusCart, product
+from aus_cart_mcp.watch.tests.conftest import FakeAusCart, product
 
 
 def make(store, fake, clock, **kw):

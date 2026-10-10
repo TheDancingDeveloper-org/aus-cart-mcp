@@ -2,7 +2,7 @@
 
 from aus_cart_mcp.watch import config
 from aus_cart_mcp.watch.service import Service
-from tests.conftest import FakeAusCart, product
+from aus_cart_mcp.watch.tests.conftest import FakeAusCart, product
 
 
 def two_tenants(store, clock):

@@ -217,3 +217,93 @@ def test_backup_is_consistent_and_pruned(store, tmp_path):
     copy = Store(paths[-1])
     assert copy.get_product("woolworths", "1")["name"] == "Milk" and copy.schema_version() == store.schema_version()
     copy.close()
+
+
+def test_0005_backfills_rows_written_before_tenant_id(tmp_path):
+    """ensure() rebuilds a pre-tenant table and stamps the owner. Current SQL already has the column."""
+    from aus_cart_mcp.watch.tenant_schema import ensure
+
+    path = tmp_path / "pre.db"
+    raw = sqlite3.connect(path)
+    raw.executescript(
+        """
+        CREATE TABLE products (
+            retailer TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT '',
+            size TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            unit TEXT NOT NULL DEFAULT '',
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL,
+            PRIMARY KEY (retailer, product_id)
+        );
+        CREATE TABLE tracked_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            retailer TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            label TEXT,
+            source TEXT NOT NULL,
+            target_price REAL,
+            discount_threshold REAL,
+            auto_add INTEGER NOT NULL DEFAULT 0,
+            snoozed_until TEXT,
+            created_at TEXT NOT NULL,
+            archived_at TEXT,
+            UNIQUE (retailer, product_id),
+            FOREIGN KEY (retailer, product_id) REFERENCES products (retailer, product_id)
+        );
+        INSERT INTO products (retailer, product_id, name, first_seen, last_seen)
+            VALUES ('woolworths', '9', 'Old milk', 't', 't');
+        INSERT INTO tracked_items (retailer, product_id, source, created_at)
+            VALUES ('woolworths', '9', 'manual', 't');
+        """
+    )
+    raw.commit()
+    assert "tenant_id" not in {row[1] for row in raw.execute("PRAGMA table_info(products)")}
+    ensure(raw)
+    raw.commit()
+    stamped = raw.execute("SELECT tenant_id, retailer, product_id FROM tracked_items").fetchone()
+    assert stamped[0] == "myaiagent-owner" and stamped[1] == "woolworths" and stamped[2] == "9"
+    ensure(raw)  # idempotent once tenant_id exists
+    # The rebuilt tables already are the post-0002 shape (including columns 0003
+    # would otherwise add with ALTER). Record 0001 and 0002, the way a database
+    # migrated before tenant_id existed would have recorded them, and let migrate
+    # apply 0003 onward.
+    raw.executescript(
+        """
+        CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL);
+        INSERT INTO schema_migrations (version, name, applied_at) VALUES
+            (1, '0001_init.sql', 't'), (2, '0002_domain.sql', 't');
+        """
+    )
+    raw.commit()
+    raw.close()
+
+    upgraded = Store(path, tenant_id="myaiagent-owner")
+    upgraded.migrate()
+    row = upgraded.tracked_item("woolworths", "9")
+    assert row is not None and row["product_id"] == "9"
+    upgraded.close()
+
+
+def test_tenants_cannot_see_each_others_tracked_items(tmp_path):
+    path = tmp_path / "shared.db"
+    alice = Store(path, tenant_id="alice")
+    alice.migrate()
+    alice.upsert_product("woolworths", "1", name="Alice milk")
+    alice.track("woolworths", "1")
+    alice.close()
+
+    bob = Store(path, tenant_id="bob")
+    bob.migrate()
+    assert bob.list_tracked() == []
+    assert bob.tracked_item("woolworths", "1") is None
+    bob.upsert_product("woolworths", "2", name="Bob bread")
+    bob.track("woolworths", "2")
+    assert [row["product_id"] for row in bob.list_tracked()] == ["2"]
+    bob.close()
+
+    alice_again = Store(path, tenant_id="alice")
+    assert [row["product_id"] for row in alice_again.list_tracked()] == ["1"]
+    alice_again.close()

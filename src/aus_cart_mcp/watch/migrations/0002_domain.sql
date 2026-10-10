@@ -2,6 +2,7 @@
 -- Times are ISO-8601 UTC strings.
 
 CREATE TABLE products (
+    tenant_id TEXT NOT NULL DEFAULT '',
     retailer TEXT NOT NULL,
     product_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
@@ -10,10 +11,11 @@ CREATE TABLE products (
     unit TEXT NOT NULL DEFAULT '',
     first_seen TEXT NOT NULL,
     last_seen TEXT NOT NULL,
-    PRIMARY KEY (retailer, product_id)
+    PRIMARY KEY (tenant_id, retailer, product_id)
 );
 
 CREATE TABLE tracked_items (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     retailer TEXT NOT NULL,
     product_id TEXT NOT NULL,
@@ -25,11 +27,12 @@ CREATE TABLE tracked_items (
     snoozed_until TEXT,
     created_at TEXT NOT NULL,
     archived_at TEXT,
-    UNIQUE (retailer, product_id),
-    FOREIGN KEY (retailer, product_id) REFERENCES products (retailer, product_id)
+    UNIQUE (tenant_id, retailer, product_id),
+    FOREIGN KEY (tenant_id, retailer, product_id) REFERENCES products (tenant_id, retailer, product_id)
 );
 
 CREATE TABLE observations (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     retailer TEXT NOT NULL,
     product_id TEXT NOT NULL,
@@ -46,6 +49,7 @@ CREATE TABLE observations (
 CREATE INDEX ix_observations_item_time ON observations (retailer, product_id, observed_at);
 
 CREATE TABLE cart_snapshots (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     taken_at TEXT NOT NULL,
     retailer TEXT NOT NULL,
@@ -55,6 +59,7 @@ CREATE TABLE cart_snapshots (
 CREATE INDEX ix_cart_snapshots_time ON cart_snapshots (retailer, taken_at);
 
 CREATE TABLE shop_episodes (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     retailer TEXT NOT NULL,
     source TEXT NOT NULL,
@@ -64,14 +69,16 @@ CREATE TABLE shop_episodes (
 );
 
 CREATE TABLE candidate_decisions (
+    tenant_id TEXT NOT NULL DEFAULT '',
     retailer TEXT NOT NULL,
     product_id TEXT NOT NULL,
     decision TEXT NOT NULL CHECK (decision IN ('dismissed', 'tracked')),
     decided_at TEXT NOT NULL,
-    PRIMARY KEY (retailer, product_id)
+    PRIMARY KEY (tenant_id, retailer, product_id)
 );
 
 CREATE TABLE sale_episodes (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     retailer TEXT NOT NULL,
     product_id TEXT NOT NULL,
@@ -86,6 +93,7 @@ CREATE TABLE sale_episodes (
 CREATE INDEX ix_sale_episodes_item ON sale_episodes (retailer, product_id, ended_at);
 
 CREATE TABLE alerts (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     dedupe_key TEXT NOT NULL UNIQUE,
     kind TEXT NOT NULL,
@@ -104,6 +112,7 @@ CREATE TABLE alerts (
 CREATE INDEX ix_alerts_pending ON alerts (sent_at, due_at);
 
 CREATE TABLE runs (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id TEXT PRIMARY KEY,
     kind TEXT NOT NULL,
     started_at TEXT NOT NULL,
@@ -117,6 +126,7 @@ CREATE TABLE runs (
 CREATE INDEX ix_runs_kind_time ON runs (kind, started_at);
 
 CREATE TABLE budget_ledger (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT,
     at TEXT NOT NULL,
@@ -128,6 +138,7 @@ CREATE TABLE budget_ledger (
 CREATE INDEX ix_budget_ledger_time ON budget_ledger (retailer, at);
 
 CREATE TABLE cart_actions (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     at TEXT NOT NULL,
     retailer TEXT NOT NULL,
@@ -139,9 +150,10 @@ CREATE TABLE cart_actions (
 );
 
 CREATE TABLE item_stats (
+    tenant_id TEXT NOT NULL DEFAULT '',
     retailer TEXT NOT NULL,
     product_id TEXT NOT NULL,
     computed_at TEXT NOT NULL,
     stats TEXT NOT NULL,
-    PRIMARY KEY (retailer, product_id)
+    PRIMARY KEY (tenant_id, retailer, product_id)
 );

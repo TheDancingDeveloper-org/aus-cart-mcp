@@ -6,7 +6,7 @@ from aus_cart_mcp.watch import detect
 from aus_cart_mcp.watch.auscart import Cart, CartLine
 from aus_cart_mcp.watch.policy import Policy
 from aus_cart_mcp.watch.tracking import Tracker
-from tests.conftest import T0
+from aus_cart_mcp.watch.tests.conftest import T0
 
 MILK, BREAD, EGGS, CHIPS = "1", "2", "3", "4"
 NAMES = {MILK: "Milk", BREAD: "Bread", EGGS: "Eggs", CHIPS: "Chips"}

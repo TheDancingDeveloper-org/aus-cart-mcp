@@ -5,7 +5,7 @@ import httpx
 from aus_cart_mcp.watch import budget
 from aus_cart_mcp.watch.alerts.telegram import TelegramNotifier
 from aus_cart_mcp.watch.service import Service
-from tests.unit.test_notifiers import TOKEN, FakeBot, press
+from aus_cart_mcp.watch.tests.unit.test_notifiers import TOKEN, FakeBot, press
 
 MILK, CHOC = "888140", "6073909"
 

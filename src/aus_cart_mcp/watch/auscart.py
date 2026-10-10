@@ -9,10 +9,12 @@ from aus_cart_mcp.watch.client import AusCartClient
 from aus_cart_mcp.watch.types import (
     Blocked,
     Cart,
+    CartLine,
     Product,
     RetailerError,
     SessionRequired,
     Unavailable,
+    Usage,
     classify,
     parse_unit_price,
 )
@@ -21,10 +23,12 @@ __all__ = [
     "AusCartClient",
     "Blocked",
     "Cart",
+    "CartLine",
     "Product",
     "RetailerError",
     "SessionRequired",
     "Unavailable",
+    "Usage",
     "classify",
     "parse_unit_price",
 ]

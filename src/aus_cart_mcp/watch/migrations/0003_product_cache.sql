@@ -10,18 +10,20 @@ ALTER TABLE products ADD COLUMN last_unit_price_value REAL;
 ALTER TABLE products ADD COLUMN snapshot_at TEXT;
 
 CREATE TABLE product_images (
+    tenant_id TEXT NOT NULL DEFAULT '',
     retailer TEXT NOT NULL,
     product_id TEXT NOT NULL,
     content_type TEXT NOT NULL,
     data BLOB NOT NULL,
     fetched_at TEXT NOT NULL,
-    PRIMARY KEY (retailer, product_id)
+    PRIMARY KEY (tenant_id, retailer, product_id)
 );
 
 CREATE TABLE search_cache (
+    tenant_id TEXT NOT NULL DEFAULT '',
     retailer TEXT NOT NULL,
     query TEXT NOT NULL,
     fetched_at TEXT NOT NULL,
     product_ids TEXT NOT NULL,
-    PRIMARY KEY (retailer, query)
+    PRIMARY KEY (tenant_id, retailer, query)
 );

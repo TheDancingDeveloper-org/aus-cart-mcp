@@ -7,7 +7,7 @@ from aus_cart_mcp.watch import alerts
 from aus_cart_mcp.watch.auscart import Product
 from aus_cart_mcp.watch.policy import Policy
 from aus_cart_mcp.watch.tracking import observe
-from tests.conftest import T0
+from aus_cart_mcp.watch.tests.conftest import T0
 
 SYD = ZoneInfo("Australia/Sydney")
 

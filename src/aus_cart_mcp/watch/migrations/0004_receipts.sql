@@ -1,6 +1,7 @@
 -- CW-40 receipts: an uploaded receipt, its OCR'd lines with their Woolworths matches, and remembered
 -- line-name to product mappings so the same abbreviation never needs matching twice.
 CREATE TABLE receipts (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sha256 TEXT NOT NULL UNIQUE,
     path TEXT NOT NULL,
@@ -17,6 +18,7 @@ CREATE TABLE receipts (
 );
 
 CREATE TABLE receipt_lines (
+    tenant_id TEXT NOT NULL DEFAULT '',
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     receipt_id INTEGER NOT NULL REFERENCES receipts (id) ON DELETE CASCADE,
     line_no INTEGER NOT NULL,
@@ -36,9 +38,10 @@ CREATE TABLE receipt_lines (
 CREATE INDEX ix_receipt_lines_receipt ON receipt_lines (receipt_id, line_no);
 
 CREATE TABLE receipt_aliases (
+    tenant_id TEXT NOT NULL DEFAULT '',
     retailer TEXT NOT NULL,
     raw_key TEXT NOT NULL,
     product_id TEXT NOT NULL,
     decided_at TEXT NOT NULL,
-    PRIMARY KEY (retailer, raw_key)
+    PRIMARY KEY (tenant_id, retailer, raw_key)
 );

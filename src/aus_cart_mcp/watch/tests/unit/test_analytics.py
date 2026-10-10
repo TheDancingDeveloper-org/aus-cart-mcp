@@ -7,7 +7,7 @@ import pytest
 from aus_cart_mcp.watch import analytics
 from aus_cart_mcp.watch.auscart import Product
 from aus_cart_mcp.watch.tracking import observe
-from tests.conftest import T0
+from aus_cart_mcp.watch.tests.conftest import T0
 
 
 def obs(day: int, price: float | None, *, special: bool = False, was: float | None = None, available: bool = True):

@@ -11,7 +11,7 @@ from aus_cart_mcp.watch.auscart import (
     classify,
     parse_unit_price,
 )
-from tests.conftest import free_port
+from aus_cart_mcp.watch.tests.conftest import free_port
 
 # Recorded aus-cart-mcp 0.2 tool results and error texts.
 SEARCH_ROW = {

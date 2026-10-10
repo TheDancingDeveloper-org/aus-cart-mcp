@@ -118,24 +118,51 @@ class Store:
         out = sql
         vals = list(params)
 
-        # INSERT column lists: tenant_id is the first column and the first value.
+        # Every tenant-owned INSERT is stamped. Rows whose column list does not
+        # name tenant_id would otherwise keep the column default '' and vanish
+        # from reads that filter on the real tenant.
         def _insert(match: re.Match) -> str:
             return f"{match.group(1)}(tenant_id, "
 
-        out = _INSERT_COLS.sub(_insert, out)
-        if out != sql:
+        stamped = _INSERT_COLS.sub(_insert, out)
+        if stamped != out and re.search(r"\bVALUES\s*\(", out, re.I):
+            out = stamped
             vals.insert(0, tid)
             out = re.sub(r"\bVALUES\s*\(", "VALUES (?, ", out, count=1, flags=re.I)
-        # Conflict targets and join keys name the tenant explicitly.
-        out = out.replace("ON CONFLICT (", "ON CONFLICT (tenant_id, ")
-        out = out.replace("USING (", "USING (tenant_id, ")
+        # Natural retailer keys are composite; single-column keys (id, dedupe_key,
+        # sha256) already identify one row and must not gain tenant_id.
+        out = re.sub(
+            r"ON CONFLICT \((retailer, )",
+            r"ON CONFLICT (tenant_id, \1",
+            out,
+            flags=re.I,
+        )
+        out = re.sub(r"USING \((retailer, )", r"USING (tenant_id, \1", out, flags=re.I)
         # Reads and updates filter on it. INSERT...SELECT settings copies are not filtered.
         if not out.lstrip().upper().startswith("INSERT"):
             vals.append(tid)
             if re.search(r"\bWHERE\b", out, re.I):
                 out = re.sub(r"\bWHERE\b", "WHERE tenant_id = ? AND", out, count=1, flags=re.I)
+                # The new placeholder sits at the front of the WHERE clause, so the
+                # value has to lead the parameters that clause binds.
+                where_sql = re.split(r"\bWHERE\b", out, maxsplit=1, flags=re.I)[1]
+                # Everything from WHERE to the end binds in order, including a
+                # LIMIT after ORDER BY, so the tenant value leads all of them.
+                n_where = where_sql.count("?")
+                head, tail = vals[: -n_where], vals[-n_where:]
+                vals = head + [tail[-1], *tail[:-1]]
             else:
-                out += " WHERE tenant_id = ?"
+                clause = " WHERE tenant_id = ?"
+                match = re.search(r"\b(ORDER\s+BY|GROUP\s+BY|LIMIT|RETURNING)\b", out, re.I)
+                if match:
+                    out = out[: match.start()] + clause + " " + out[match.start() :]
+                    # The tenant placeholder was spliced in before the tail, so its
+                    # value has to sit just before the placeholders that tail binds.
+                    n_tail = out[match.start() + len(clause) :].count("?")
+                    if n_tail:
+                        vals = vals[: -(n_tail + 1)] + [tid] + vals[-(n_tail + 1) : -1]
+                else:
+                    out += clause
         elif "SELECT" in out.upper() and "WHERE" not in out.upper():
             pass
         return out, tuple(vals)
@@ -184,6 +211,14 @@ class Store:
                     db.execute("ROLLBACK")
                     raise
                 applied.append(migration.name)
+            # 0005 records the version. The rebuild is Python and only touches a
+            # file whose tables predate tenant_id; a fresh install already has
+            # the column from the SQL migrations.
+            done = {row[0] for row in db.execute("SELECT version FROM schema_migrations")}
+            if 5 in done:
+                from aus_cart_mcp.watch.tenant_schema import ensure
+
+                ensure(db)
         return applied
 
     def schema_version(self) -> int:
@@ -937,9 +972,11 @@ def _query_key(query: str) -> str:
 
 
 def _statements(sql: str) -> list[str]:
-    """Split a migration into statements on `;`: migrations must not use `;` in comments, strings or triggers."""
-    return [s.strip() for s in sql.split(";") if s.strip() and not _comment_only(s)]
+    """Split a migration into statements on `;`.
 
-
-def _comment_only(chunk: str) -> bool:
-    return all(not line.strip() or line.strip().startswith("--") for line in chunk.splitlines())
+    Line comments are stripped first, so a comment that follows a statement
+    without its own semicolon is not executed as SQL. Migrations must not use
+    `;` inside strings or triggers.
+    """
+    lines = [line.split("--", 1)[0] for line in sql.splitlines()]
+    return [s.strip() for s in "\n".join(lines).split(";") if s.strip()]

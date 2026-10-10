@@ -1,4 +1,4 @@
-"""Shared fixtures. Every layer runs offline: e2e drives the real aus-cart-mcp against its mock Woolworths."""
+"""Shared fixtures. Every layer runs offline: e2e drives the product server against its mock Woolworths."""
 
 from __future__ import annotations
 
