@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Receipts</h1>
+{% if ocr_ready %}
+<form method="post" action="/receipts" enctype="multipart/form-data" class="card">
+  <p><label>Photo of a Woolworths receipt<br>
+    <input type="file" name="photo" accept="image/*" capture="environment" required></label></p>
+  <button class="primary" type="submit">Read receipt</button>
+  <p class="muted">The photo is read by an AI model through OpenRouter, nowhere else. Card and member numbers are not stored.
+  Lines are then matched to Woolworths products in the background, a few seconds apart, within the daily budget.</p>
+</form>
+{% else %}<p>Receipt reading is not configured (AUS_CARTWATCH_OPENROUTER_KEY).</p>{% endif %}
+{% for r in receipts %}
+<div class="card"><div class="row">
+  <div class="grow"><a class="name" href="/receipts/{{ r.id }}">{{ r.store_name or 'Receipt' }} · {{ r.purchased_at|when if r.purchased_at else r.uploaded_at|when }}</a><br>
+    <span class="muted">{{ r.line_count }} lines · {{ r.status }}{% if r.total %} · {{ r.total|money }}{% endif %}{% if r.error %} · {{ r.error }}{% endif %}</span></div>
+</div></div>
+{% endfor %}
+{% endblock %}

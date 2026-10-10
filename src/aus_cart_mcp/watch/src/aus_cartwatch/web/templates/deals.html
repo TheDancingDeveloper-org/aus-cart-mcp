@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Deals today</h1>
+{% if not deals %}<p>No tracked item is on sale right now.</p>{% endif %}
+{% for d in deals %}
+<div class="card"><div class="row">
+  {% set src = photo_src(d.retailer, d.product_id, d.image_url) %}{% if src %}<img class="thumb" src="{{ src }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="thumb empty"></span>{% endif %}
+  <div class="grow">
+    {% if d.item %}<a class="name" href="/items/{{ d.item.id }}">{{ d.item.label or d.name }}</a>{% else %}<span class="name">{{ d.name }}</span> <span class="muted">(not tracked)</span>{% endif %}
+    <span class="muted">{{ d.size }}</span><br>
+    <span class="badge {{ 'hot' if d.stats.heavy else 'sale' }}">{{ d.max_discount|percent }} off</span>
+    <span class="muted">usually {{ d.baseline|money }} · since {{ d.started_at|when }}</span>
+  </div>
+  <div class="price">{{ (d.stats.price if d.stats.price is not none else d.last_price)|money }}</div>
+</div>
+{% if d.item %}<div class="row" style="margin-top:8px">{% set item = d.item %}{% set next = "/deals" %}{% include "_add.html" %}</div>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}

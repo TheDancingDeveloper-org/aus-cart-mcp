@@ -1,0 +1,9 @@
+.venv
+.git
+*.db
+.pytest_cache
+.ruff_cache
+tests
+.coverage
+.github
+design

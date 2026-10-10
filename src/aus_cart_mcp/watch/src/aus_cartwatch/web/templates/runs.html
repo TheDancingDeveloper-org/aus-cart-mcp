@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Runs</h1>
+<div class="scroll"><table><tr><th>Started</th><th>Kind</th><th>Outcome</th><th class="num">Upstream</th><th>Note</th></tr>
+{% for r in runs %}<tr><td>{{ r.started_at|when }}</td><td>{{ r.kind }}</td><td>{{ r.outcome or 'running' }}</td><td class="num">{{ r.upstream_requests }}</td><td>{{ r.note or '' }}</td></tr>{% endfor %}
+</table></div>
+<h2>Budget ledger</h2>
+<div class="scroll"><table><tr><th>When</th><th>Tool</th><th class="num">Upstream</th><th>Outcome</th><th>Run</th></tr>
+{% for l in ledger %}<tr><td>{{ l.at|when }}</td><td>{{ l.tool }}</td><td class="num">{{ l.upstream_requests }}</td><td>{{ l.outcome }}</td><td class="muted">{{ l.run_id or '' }}</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

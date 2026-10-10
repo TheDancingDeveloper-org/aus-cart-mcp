@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Receipt · aus_cartwatch{% endblock %}
+{% block content %}
+{% if receipt.status == 'matching' %}<meta http-equiv="refresh" content="5">{% endif %}
+<h1>{{ receipt.store_name or 'Receipt' }} <span class="muted">{{ receipt.purchased_at|when if receipt.purchased_at else '' }}</span></h1>
+<p class="muted">
+  {{ lines|length }} lines · total {{ receipt.total|money }}{% if receipt.lines_sum is not none and receipt.total is not none and (receipt.lines_sum - receipt.total)|abs > 0.01 %} · <strong>lines add up to {{ receipt.lines_sum|money }}: check the reading</strong>{% endif %}
+  · {{ receipt.status }}{% if counts %} ({% for k, v in counts.items() %}{{ v }} {{ k }}{{ ', ' if not loop.last }}{% endfor %}){% endif %}
+  {% if receipt.error %}<br><strong>{{ receipt.error }}</strong>{% endif %}
+</p>
+{% if counts.get('pending') and receipt.status != 'matching' %}
+<form method="post" action="/receipts/{{ receipt.id }}/match"><button type="submit">Match the remaining {{ counts.pending }} lines</button></form>
+{% endif %}
+{% if receipt.status in ('matched', 'extracted') and not counts.get('pending') %}
+<form method="post" action="/receipts/{{ receipt.id }}/rematch"><button type="submit">Match again</button></form>
+{% endif %}
+<form method="post" action="/receipts/{{ receipt.id }}/confirm">
+{% for line in lines %}
+<div class="card"><div class="row">
+  {% if line.product_id and line.match_status in ('good', 'check', 'alias') %}
+  <input type="checkbox" name="line_{{ line.id }}" value="{{ line.product_id }}" aria-label="track this line"
+    {{ 'checked' if line.match_status in ('good', 'alias') and line.product_id not in tracked }} {{ 'disabled' if receipt.status == 'confirmed' }}>
+  {% set src = photo_src('woolworths', line.product_id) %}{% if src %}<img class="thumb" src="{{ src }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+  {% endif %}
+  <div class="grow">
+    <span class="name">{{ line.raw_name }}</span> <span class="muted">{% if line.quantity != 1 %}{{ '%g'|format(line.quantity) }} × {{ line.unit_price|money }} · {% endif %}{{ line.line_total|money }}{% if line.promo %} · promo{% endif %}</span><br>
+    {% if line.match_status == 'skipped' %}<span class="muted">loose produce, priced by weight: not tracked</span>
+    {% elif line.match_status == 'pending' %}<span class="muted">matching…</span>
+    {% elif line.match_status == 'none' %}<span class="badge">no match</span> <span class="muted">{{ line.note }}</span>
+    {% else %}<span class="badge {{ 'sale' if line.match_status in ('good', 'alias') else 'target' }}">{{ {'good': 'match', 'alias': 'matched before', 'check': 'check'}[line.match_status] }}</span>
+      {{ line.product_name }} <span class="muted">{{ line.product_price|money }}{% if line.product_id in tracked %} · tracked{% endif %}{% if line.note %} · {{ line.note }}{% endif %}</span>{% endif %}
+  </div>
+</div></div>
+{% endfor %}
+{% if receipt.status != 'confirmed' %}<div class="sticky-actions"><button class="primary" type="submit">Track ticked items and save the shop</button></div>{% endif %}
+</form>
+{% endblock %}

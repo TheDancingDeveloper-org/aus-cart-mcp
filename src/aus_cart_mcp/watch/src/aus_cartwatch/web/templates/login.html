@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · aus_cartwatch</title>
+<style>body{font:16px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#fbfaf7;color:#1d1c1a}
+@media (prefers-color-scheme: dark){body{background:#151514;color:#ecebe7}}
+form{display:grid;gap:10px;padding:16px;width:min(320px,100% - 32px)}input,button{font:inherit;padding:10px;border-radius:8px;border:1px solid #888}</style></head>
+<body><form method="post" action="/login">
+<h1>aus_cartwatch</h1>
+{% if locked %}<p>The web UI is locked: set <code>AUS_CARTWATCH_UI_PASSWORD_HASH</code> (see <code>python -m aus_cartwatch hash-password</code>).</p>{% endif %}
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+<label>Password <input type="password" name="password" autocomplete="current-password" autofocus required></label>
+<button type="submit">Sign in</button>
+</form></body></html>
