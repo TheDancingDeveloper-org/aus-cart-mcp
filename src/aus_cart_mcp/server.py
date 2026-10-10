@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from aus_cart_mcp import __version__, config
+from aus_cart_mcp import __version__, config, features
 from aus_cart_mcp.gateway import Gateway, Limits
 from aus_cart_mcp.retailers import CATALOGUE, RETAILERS
 from aus_cart_mcp.retailers.base import RetailerError
@@ -73,8 +73,11 @@ def parse_quantities(items: list[dict]) -> dict[str, float]:
     return out
 
 
-def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gateway]:
+def build(
+    store: Store, gateway: Gateway | None = None, selected: features.Features | None = None
+) -> tuple[MCPServer, Gateway]:
     gateway = gateway or Gateway(store)
+    selected = selected or features.load()
     mcp = MCPServer(SERVER_NAME, instructions=INSTRUCTIONS, version=__version__)
     register = mcp.tool
 
@@ -102,6 +105,11 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
 
     def result(payload) -> str:
         return json.dumps(payload, ensure_ascii=False, default=str)
+
+    @tool()
+    async def server_info() -> str:
+        """Which layers and retailers this server is running. Needs no retailer session."""
+        return result({"version": __version__, "features": selected.to_dict(), "retailers": sorted(RETAILERS)})
 
     @tool()
     async def list_retailers(include_planned: bool = False) -> str:
@@ -211,15 +219,29 @@ class BearerAuth:
         await self.app(scope, receive, send)
 
 
-def create_app(store: Store | None = None, limits: Limits | None = None, gateway: Gateway | None = None) -> Starlette:
+def create_app(
+    store: Store | None = None,
+    limits: Limits | None = None,
+    gateway: Gateway | None = None,
+    selected: features.Features | None = None,
+) -> Starlette:
     """The ASGI app. Tests inject a store and a gateway wired to a mock retailer."""
     store = store or Store(config.db_path(), config.secret())
-    mcp, _ = build(store, gateway or Gateway(store, limits))
+    selected = selected or features.load()
+    mcp, _ = build(store, gateway or Gateway(store, limits), selected)
     app = mcp.streamable_http_app(stateless_http=True, json_response=True, host="0.0.0.0")
 
     async def healthz(request: Request) -> JSONResponse:
-        return JSONResponse({"ok": True, "version": __version__, "retailers": sorted(RETAILERS)})
+        return JSONResponse(
+            {"ok": True, "version": __version__, "retailers": sorted(RETAILERS), "features": selected.to_dict()}
+        )
+
+    async def ui_absent(request: Request) -> JSONResponse:
+        return JSONResponse({"error": "ui layer is not enabled"}, status_code=404)
 
     app.add_route("/healthz", healthz)
+    if not selected.has("ui"):
+        app.add_route("/ui", ui_absent)
+        app.add_route("/ui/{path:path}", ui_absent)
     app.add_middleware(BearerAuth, store=store)
     return app
