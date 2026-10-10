@@ -28,10 +28,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from aus_cartwatch import alerts, config, detect, tracking
-from aus_cartwatch.auscart import AusCartClient, AusCartError, Blocked, SessionRequired, Unavailable
-from aus_cartwatch.policy import Policy, in_window
-from aus_cartwatch.store import Store, parse_time, utcnow
+from aus_cart_mcp.watch import alerts, config, detect, tracking
+from aus_cart_mcp.watch.types import AusCartClient, AusCartError, Blocked, SessionRequired, Unavailable
+from aus_cart_mcp.watch.policy import Policy, in_window
+from aus_cart_mcp.watch.store import Store, parse_time, utcnow
 
 log = logging.getLogger(__name__)
 

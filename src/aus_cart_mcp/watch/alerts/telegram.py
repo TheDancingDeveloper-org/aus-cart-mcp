@@ -15,8 +15,8 @@ from collections.abc import Awaitable, Callable
 
 import httpx
 
-from aus_cartwatch.alerts import Message
-from aus_cartwatch.store import Store
+from aus_cart_mcp.watch.alerts import Message
+from aus_cart_mcp.watch.store import Store
 
 log = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)  # httpx logs URLs, and the Bot API URL carries the token

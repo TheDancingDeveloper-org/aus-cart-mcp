@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from datetime import time
 
-from aus_cartwatch.store import Store
+from aus_cart_mcp.watch.store import Store
 
 
 def _clock(value: str) -> time:
