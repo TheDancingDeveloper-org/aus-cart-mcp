@@ -23,10 +23,10 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from aus_cartwatch import __version__, config, detect, tracking, web
-from aus_cartwatch.policy import Policy
-from aus_cartwatch.service import Service
-from aus_cartwatch.store import Store, utcnow
+from aus_cart_mcp.watch import __version__, config, detect, tracking, web
+from aus_cart_mcp.watch.policy import Policy
+from aus_cart_mcp.watch.service import Service
+from aus_cart_mcp.watch.store import Store, utcnow
 
 SERVER_NAME = "aus_cartwatch"
 MAX_HISTORY_POINTS = 200
@@ -252,7 +252,7 @@ def build(service: Service) -> MCPServer:
     async def recent_alerts(limit: int = 20, unsent_only: bool = False) -> str:
         """Recent alerts (on sale, heavy discount, target price, operator), newest first, with whether
         each was delivered. Alerts are kept here even when no notifier is configured."""
-        from aus_cartwatch.alerts import describe
+        from aus_cart_mcp.watch.alerts import describe
 
         rows = store.recent_alerts(limit=max(1, min(limit, 100)))
         if unsent_only:
@@ -322,7 +322,7 @@ def metrics_text(service: Service) -> str:
     last_ok = store._one(
         "SELECT MAX(finished_at) AS at FROM runs WHERE kind = 'refresh' AND outcome IN ('ok', 'partial')"
     )["at"]
-    from aus_cartwatch.store import parse_time
+    from aus_cart_mcp.watch.store import parse_time
 
     pending = store._one("SELECT COUNT(*) AS n FROM alerts WHERE sent_at IS NULL")["n"]
     gauges = {

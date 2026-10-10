@@ -35,10 +35,10 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from aus_cartwatch import analytics, config
-from aus_cartwatch.auscart import AusCartError, Blocked, Product
-from aus_cartwatch.store import Store, utcnow
-from aus_cartwatch.tracking import Tracker
+from aus_cart_mcp.watch import analytics, config
+from aus_cart_mcp.watch.types import AusCartError, Blocked, Product
+from aus_cart_mcp.watch.store import Store, utcnow
+from aus_cart_mcp.watch.tracking import Tracker
 
 log = logging.getLogger(__name__)
 

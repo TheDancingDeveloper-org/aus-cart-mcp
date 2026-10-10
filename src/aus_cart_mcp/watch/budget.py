@@ -9,9 +9,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime
 
-from aus_cartwatch import config
-from aus_cartwatch.auscart import AusCartClient, OnCall
-from aus_cartwatch.store import Store, utcnow
+from aus_cart_mcp.watch import config
+from aus_cart_mcp.watch.types import AusCartClient, OnCall
+from aus_cart_mcp.watch.store import Store, utcnow
 
 
 def ledger_hook(
