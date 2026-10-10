@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Suggestions</h1>
+<p class="muted">Products that were in the cart in at least two of the last six shops but are not tracked.</p>
+{% if not candidates %}<p>No suggestions yet. They appear after a few shops.</p>{% endif %}
+{% for c in candidates %}
+<div class="card"><div class="row">
+  {% set src = photo_src(c.retailer, c.product_id, none) %}{% if src %}<img class="thumb" src="{{ src }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="thumb empty"></span>{% endif %}
+  <div class="grow"><span class="name">{{ c.name or c.product_id }}</span><br>
+    <span class="muted">in {{ c.seen }} of {{ c.episodes }} shops · confidence {{ c.confidence|percent }}{% if c.price %} · last {{ c.price|money }}{% endif %}</span></div>
+  <form class="inline" method="post" action="/candidates/{{ c.product_id }}/track"><button class="primary">Track</button></form>
+  <form class="inline" method="post" action="/candidates/{{ c.product_id }}/dismiss"><button>Dismiss</button></form>
+</div></div>
+{% endfor %}
+{% endblock %}
