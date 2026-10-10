@@ -195,6 +195,12 @@ def build(
         tenant = await tenant_of(ctx)
         return result(await store.usage_summary(tenant.id, max(1, min(days, 366))))
 
+    if selected.has("watch"):
+        # Lazy: core must not import the watch package unless the flag is on.
+        from aus_cart_mcp.watch.register import register as register_watch
+
+        register_watch(mcp, tool, store, gateway)
+
     return mcp, gateway
 
 

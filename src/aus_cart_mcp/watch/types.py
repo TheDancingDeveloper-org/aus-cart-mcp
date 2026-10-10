@@ -149,3 +149,4 @@ class Connection:
     error: str = ""
 
 
+from aus_cart_mcp.watch.client import AusCartClient as AusCartClient  # noqa: E402  (budget imports it from here)
