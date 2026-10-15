@@ -69,17 +69,50 @@ class Woolworths:
     def has_bot_cookies(self, cookies: dict[str, str]) -> bool:
         return any(k.startswith(("bm_", "_abck")) for k in cookies)
 
-    def login_expired(self, cookies: dict[str, str], now: float) -> bool:
-        """The login token (`wow-auth-token`, a JWT) lasts 60 minutes; only its `exp` claim is read."""
+    def _token_exp(self, cookies: dict[str, str]) -> float | None:
+        """`exp` of `wow-auth-token` (or `prodwow-auth-token`). Nothing else in the JWT is read."""
         token = cookies.get("wow-auth-token") or cookies.get("prodwow-auth-token")
         if not token or token.count(".") != 2:
-            return False
+            return None
         try:
             part = token.split(".")[1]
             exp = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))).get("exp")
         except (ValueError, TypeError):
-            return False
-        return isinstance(exp, int | float) and exp <= now
+            return None
+        return float(exp) if isinstance(exp, int | float) else None
+
+    def login_expired(self, cookies: dict[str, str], now: float) -> bool:
+        """The login token lasts 60 minutes; only its `exp` claim is read."""
+        exp = self._token_exp(cookies)
+        return exp is not None and exp <= now
+
+    def login_expiring(self, cookies: dict[str, str], now: float, *, within: float) -> bool:
+        exp = self._token_exp(cookies)
+        return exp is not None and now < exp <= now + within
+
+    async def refresh_session(self, http: httpx.AsyncClient) -> bool:
+        """GET /auth/heartbeat, the call the website makes about every 20 minutes to renew the login.
+
+        Observed 2026-10-15 (owner's browser, one hour, still logged in at the end): four GETs,
+        each answered 200 with `{"refreshed": true}`. The new token arrives as a Set-Cookie the
+        HTTP client stores; this method does not read or return cookie values.
+        """
+        headers = {**_API_HEADERS, "Origin": self.base_url, "Referer": f"{self.base_url}/"}
+        try:
+            response = await http.get("/auth/heartbeat", headers=headers)
+        except httpx.HTTPError as exc:
+            raise RetailerError(f"Woolworths unreachable: {exc}") from exc
+        if response.status_code == 401:
+            raise SessionRequired("Woolworths refused the session; reconnect Woolworths")
+        if response.status_code in (403, 429):
+            raise Blocked(f"Woolworths is refusing requests (HTTP {response.status_code})")
+        if response.status_code >= 400:
+            raise RetailerError(f"Woolworths returned HTTP {response.status_code}")
+        try:
+            data = response.json()
+        except json.JSONDecodeError as exc:
+            raise Blocked("Woolworths returned a web page instead of data (a bot challenge?)") from exc
+        return isinstance(data, dict) and data.get("refreshed") is True
 
     async def warm(self, http: httpx.AsyncClient) -> None:
         try:
