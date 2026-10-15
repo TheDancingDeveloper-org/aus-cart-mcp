@@ -144,6 +144,18 @@ class Retailer(Protocol):
         """True when the stored cookies show the customer's login has expired (False when it can't tell)."""
         ...
 
+    def login_expiring(self, cookies: dict[str, str], now: float, *, within: float) -> bool:
+        """True when the login expires within `within` seconds. Default: never, so nothing is refreshed."""
+        return False
+
+    async def refresh_session(self, http: httpx.AsyncClient) -> bool:
+        """Renew a login the way the retailer's own site does. Default: there is no renewal call.
+
+        The gateway calls this only when `login_expiring` is true, and only before a call that needs
+        the login. Returns whether the retailer said the login was renewed.
+        """
+        return False
+
     async def warm(self, http: httpx.AsyncClient) -> None: ...
 
     async def shopper(self, http: httpx.AsyncClient) -> Shopper: ...

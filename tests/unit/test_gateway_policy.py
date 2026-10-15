@@ -182,19 +182,17 @@ def _jwt(exp: float) -> str:
     return f"h.{body}.s"
 
 
-async def test_searches_go_anonymous_when_the_stored_login_has_expired(store, make_gateway, mock_state):
-    import time
-
+async def test_searches_go_anonymous_when_the_stored_login_has_expired(store, make_gateway, mock_state, clock):
     gateway = make_gateway(search_ttl=0)
     tenant, _ = store.create_tenant_sync("owner")
     cookies = parse_cookie_header(signed_in_cookie(mock_state))
     await gateway.connect(tenant, "woolworths", cookies)
     assert (tenant.id, "woolworths") in gateway._conns  # searches use the signed-in connection
-    stale = {**cookies, "wow-auth-token": _jwt(time.time() - 60)}
+    stale = {**cookies, "wow-auth-token": _jwt(clock.wall - 60)}
     await store.put_session(tenant.id, "woolworths", {"cookies": stale})
     await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
     assert (None, "woolworths") in gateway._conns  # ...and an anonymous one once the login token expired
-    fresh = {**cookies, "wow-auth-token": _jwt(time.time() + 3600)}
+    fresh = {**cookies, "wow-auth-token": _jwt(clock.wall + 3600)}
     await store.put_session(tenant.id, "woolworths", {"cookies": fresh})
     gateway._conns.pop((None, "woolworths"))
     await gateway.search(tenant, "woolworths", "bread", limit=1, specials_only=False)
@@ -209,3 +207,66 @@ def test_woolworths_login_expiry_reads_only_exp():
     assert not w.login_expired({"wow-auth-token": _jwt(200)}, 101)
     assert not w.login_expired({}, 101) and not w.login_expired({"wow-auth-token": "garbage"}, 101)
     assert not w.login_expired({"wow-auth-token": "a.!!!.c"}, 101)
+
+
+def test_woolworths_login_expiring_is_the_last_ten_minutes_only():
+    from aus_cart_mcp.retailers.woolworths import Woolworths
+
+    w = Woolworths()
+    token = {"wow-auth-token": _jwt(1_000)}
+    assert w.login_expiring(token, 400, within=600)  # 600s left
+    assert w.login_expiring(token, 400, within=600)
+    assert not w.login_expiring(token, 399, within=600)  # 601s left: too early
+    assert not w.login_expiring(token, 1_000, within=600)  # already due, not "within"
+    assert not w.login_expiring({}, 900, within=600)
+    assert w.login_expiring({"prodwow-auth-token": _jwt(1_000)}, 900, within=600)
+
+
+async def test_cart_refreshes_a_login_inside_ten_minutes_and_only_once(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(cart_ttl=0, shopper_ttl=0)
+    tenant, _ = store.create_tenant_sync("t")
+    cookies = parse_cookie_header(signed_in_cookie(mock_state))
+    cookies["wow-auth-token"] = _jwt(clock.wall + 3600)
+    await gateway.connect(tenant, "woolworths", cookies)
+    await gateway.cart(tenant, "woolworths")
+    assert not any(r.endswith("/auth/heartbeat") or r == "GET /auth/heartbeat" for r in mock_state.requests)
+
+    clock.wall += 51 * 60  # 9 minutes of life left
+    gateway._cache.clear()  # the 30s cart cache would hide the refresh
+    mock_state.heartbeat_exp = clock.wall + 3600
+    await gateway.cart(tenant, "woolworths")
+    heartbeats = [r for r in mock_state.requests if "heartbeat" in r]
+    assert heartbeats == ["GET /auth/heartbeat"], mock_state.requests
+    sent = len(mock_state.requests)
+    clock.now += 31  # past the cart TTL; the monotonic clock does not move on its own
+    await gateway.cart(tenant, "woolworths")  # one attempt per connection
+    assert len(mock_state.requests) == sent + 2  # shopper check + trolley, no second heartbeat
+    assert sum("heartbeat" in r for r in mock_state.requests) == 1
+    stored = await store.get_session(tenant.id, "woolworths")
+    renewed = stored["cookies"].get("wow-auth-token")
+    assert renewed and renewed != cookies["wow-auth-token"]
+    from aus_cart_mcp.retailers.woolworths import Woolworths
+
+    assert not Woolworths().login_expiring({"wow-auth-token": renewed}, clock.wall, within=600)
+
+
+async def test_search_does_not_refresh_a_login(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(search_ttl=0)
+    tenant, _ = store.create_tenant_sync("t")
+    cookies = parse_cookie_header(signed_in_cookie(mock_state))
+    cookies["wow-auth-token"] = _jwt(clock.wall + 5 * 60)
+    await gateway.connect(tenant, "woolworths", cookies)
+    await gateway.search(tenant, "woolworths", "milk", limit=1, specials_only=False)
+    assert not any(r.endswith("/auth/heartbeat") or r == "GET /auth/heartbeat" for r in mock_state.requests)
+
+
+async def test_heartbeat_counts_toward_the_daily_cap(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(daily_cap=3, cart_ttl=0, shopper_ttl=0)
+    tenant, _ = store.create_tenant_sync("t")
+    cookies = parse_cookie_header(signed_in_cookie(mock_state))
+    cookies["wow-auth-token"] = _jwt(clock.wall + 5 * 60)
+    await gateway.connect(tenant, "woolworths", cookies)  # bootstrap = 1
+    # cart: heartbeat + bootstrap (shopper ttl 0, cache cleared) + trolley = 3, so the cap stops it
+    with pytest.raises(RetailerError, match="daily request cap"):
+        await gateway.cart(tenant, "woolworths")
+    assert "GET /auth/heartbeat" in mock_state.requests

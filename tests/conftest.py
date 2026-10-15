@@ -26,18 +26,26 @@ def mock_app(mock_state):
 
 
 class FakeClock:
-    """A controllable monotonic clock; `sleep` advances it instead of waiting."""
+    """A controllable monotonic clock; `sleep` advances it instead of waiting.
+
+    `wall` is epoch seconds for retailer token expiry, and moves with `sleep` too.
+    """
 
     def __init__(self):
         self.now = 1000.0
+        self.wall = 1_700_000_000.0
         self.slept: list[float] = []
 
     def __call__(self) -> float:
         return self.now
 
+    def wall_clock(self) -> float:
+        return self.wall
+
     async def sleep(self, seconds: float) -> None:
         self.slept.append(seconds)
         self.now += seconds
+        self.wall += seconds
 
 
 @pytest.fixture()
@@ -55,6 +63,7 @@ def make_gateway(store, mock_app, clock):
             transport_factory=lambda: httpx.ASGITransport(app=mock_app),
             clock=clock,
             sleep=clock.sleep,
+            wall_clock=clock.wall_clock,
         )
 
     return factory

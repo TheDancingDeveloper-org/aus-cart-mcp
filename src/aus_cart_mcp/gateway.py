@@ -85,6 +85,7 @@ class _Conn:
     transport: _MeteredTransport
     saved_jar: dict[str, str]
     last_used: float = 0.0
+    refreshed: bool = False  # one login-renewal attempt per connection
 
 
 class Gateway:
@@ -195,17 +196,33 @@ class Gateway:
             await self.store.put_session(tenant.id, retailer.key, {**data, "cookies": jar})
             conn.saved_jar = jar
 
-    async def _shopper(self, tenant: Tenant, retailer: Retailer, conn: _Conn) -> Shopper:
+    async def _shopper(self, tenant: Tenant, retailer: Retailer, conn: _Conn, stored: dict | None = None) -> Shopper:
+        await self._maybe_refresh(tenant, retailer, conn, stored)
         key = ("shopper", tenant.id, retailer.key)
         cached = self._cached(key)
         if cached is not None:
             return cached
         return self._remember(key, await retailer.shopper(conn.http), self.limits.shopper_ttl)
 
+    async def _maybe_refresh(self, tenant: Tenant, retailer: Retailer, conn: _Conn, stored: dict | None) -> None:
+        """Renew a login that is inside its last 10 minutes, before a call that needs it.
+
+        One attempt per connection: a retailer that does not hand back a new expiry must not be
+        asked again on every cart call. The request is metered like any other (the transport counts it).
+        """
+        if stored is None or conn.refreshed:
+            return
+        cookies = {c.name: c.value for c in conn.http.cookies.jar}
+        if not retailer.login_expiring(cookies, self._wall(), within=10 * 60):
+            return
+        conn.refreshed = True
+        if await retailer.refresh_session(conn.http):
+            self._forget(tenant.id, retailer.key, "shopper")
+
     async def _require_login(self, tenant: Tenant, retailer: Retailer, conn: _Conn, stored: dict | None) -> None:
         if stored is None:
             raise SessionRequired(f"{retailer.info.name} isn't connected for this account; connect a session first")
-        if not (await self._shopper(tenant, retailer, conn)).logged_in:
+        if not (await self._shopper(tenant, retailer, conn, stored)).logged_in:
             raise SessionRequired(f"the saved {retailer.info.name} session has expired; reconnect it")
 
     # ── one metered operation ─────────────────────────────────────────────

@@ -165,6 +165,21 @@ def create_app(state: MockState | None = None) -> Starlette:
                 cart[code] = qty
         return JSONResponse(load("update_ok"))
 
+    @api
+    async def heartbeat(request: Request) -> Response:
+        """Stand-in for GET /auth/heartbeat. Sets a synthetic renewed marker; never a real token."""
+        if session_of(request) is None:
+            return JSONResponse({"refreshed": False}, status_code=401)
+        response = JSONResponse({"refreshed": True})
+        # Synthetic JWT, `exp` only. Tests set state.heartbeat_exp; default is far ahead. Not a real token.
+        import base64
+        import json as _json
+
+        exp = int(getattr(state, "heartbeat_exp", 2_000_000_000))
+        body = base64.urlsafe_b64encode(_json.dumps({"exp": exp}).encode()).decode().rstrip("=")
+        response.set_cookie("wow-auth-token", f"h.{body}.s")
+        return response
+
     async def image(request: Request) -> Response:
         state.requests.append(f"GET {request.url.path}")
         if state.blocked:
@@ -191,6 +206,7 @@ def create_app(state: MockState | None = None) -> Starlette:
             Route("/apis/ui/products/{codes}", products),
             Route("/apis/ui/Trolley", trolley),
             Route("/api/v3/ui/trolley/update", update, methods=["POST"]),
+            Route("/auth/heartbeat", heartbeat),
             Route("/content/wowproductimages/medium/{code}.jpg", image),
             Route("/__mock/block", block, methods=["POST"]),
             Route("/__mock/reset", reset, methods=["POST"]),
