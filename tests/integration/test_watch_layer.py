@@ -68,3 +68,57 @@ async def test_tracked_item_is_invisible_to_the_other_tenant(store, gateway):
     refreshed = await call("run_refresh", alice, {})
     assert refreshed["refreshed"] == 1
     assert (await call("run_refresh", bob, {}))["refreshed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_track_does_not_price_a_different_product(store, gateway):
+    """A search hit that is not the asked-for id must not be stored against it."""
+    from mcp.server.mcpserver import Context
+
+    mcp, _gw = build(store, gateway, features.parse("core,watch"))
+    alice, _ = store.create_tenant_sync("alice")
+    tools = {tool.name: tool for tool in mcp._tool_manager.list_tools()}
+
+    async def call(name, arguments):
+        ctx = Context(request_context=_RequestContext(alice))
+        result = await tools[name].run(arguments, ctx, convert_result=False)
+        return json.loads(result)
+
+    tracked = await call("track_item", {"product_id": "not-a-real-stockcode"})
+    assert tracked["tracked"] is True
+    assert tracked["price"] is None
+    listed = await call("list_tracked", {})
+    assert listed["items"] == [{"product_id": "not-a-real-stockcode", "name": "", "price": None}]
+
+
+@pytest.mark.asyncio
+async def test_budget_counts_real_upstream_and_placeholders_say_so(store, gateway):
+    from mcp.server.mcpserver import Context
+
+    mcp, gw = build(store, gateway, features.parse("core,watch"))
+    alice, _ = store.create_tenant_sync("alice")
+    tools = {tool.name: tool for tool in mcp._tool_manager.list_tools()}
+
+    async def call(name, arguments):
+        ctx = Context(request_context=_RequestContext(alice))
+        result = await tools[name].run(arguments, ctx, convert_result=False)
+        return json.loads(result)
+
+    await gw.search(alice, "woolworths", "milk", limit=1, specials_only=False)
+    budget = await call("budget_status", {})
+    assert budget["upstream_today"] >= 1
+    assert (await call("suggest_items", {}))["available"] is False
+    assert (await call("recent_alerts", {}))["available"] is False
+
+
+def test_a_renamed_tenant_does_not_share_rows(store, gateway):
+    """The ledger key is the tenant id, not the display name."""
+    from aus_cart_mcp.watch.ledger import Ledger
+
+    alice, _ = store.create_tenant_sync("alice")
+    ledger = Ledger(store._path)
+    ledger.track(alice.id, "woolworths", "1", name="Milk", price=2.0)
+    other, _ = store.create_tenant_sync("not-alice")
+    assert other.id != alice.id
+    assert ledger.list(other.id, "woolworths") == []
+    assert ledger.list(alice.id, "woolworths")[0].name == "Milk"
