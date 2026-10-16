@@ -27,3 +27,14 @@ Rules:
 
 `server_info` and `/healthz` report the enabled layers, so a deployment can
 show what it is actually running.
+
+
+## Interim watch layer
+
+The watch package that ships with the feature flag is an interim stand-in:
+one `watch_tracked` table keyed by `(tenant_id, retailer, product_id)`, price
+lookups through the core gateway, and the cartwatch tool names. It does not
+yet port analytics, sale detection, the scheduler, the old migrations, or the
+cartwatch tests. Those stay on WI-1232, WI-1233, WI-1234, WI-1238 and WI-1239.
+`price_history` returns the current price only. `suggest_items` and
+`recent_alerts` say they are not implemented.

@@ -67,20 +67,19 @@ def test_layers_do_not_import_upwards():
         for path in paths:
             used = imports_of(path)
             hit = [name for name in used if any(name == ban or name.startswith(ban + ".") for ban in banned)]
-            # server.py is the MCP adapter. It may import watch.register, and
-            # only inside the flag branch (the import is not at module level).
-            if path.name == "server.py" and layer == "core":
+            # The only allowed upward import is the flag-gated watch.register.
+            # A function-level import of ui, or of any other watch module, still fails.
+            allowed = {"aus_cart_mcp.watch.register"} if path.name == "server.py" and layer == "core" else set()
+            unexpected = [name for name in hit if name not in allowed]
+            assert not unexpected, f"{path} imports a layer it must not: {unexpected}"
+            if allowed & set(hit):
                 tree = ast.parse(path.read_text())
-                module_level = set()
-                for node in tree.body:
-                    if isinstance(node, ast.Import):
-                        module_level.update(a.name for a in node.names)
-                    elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                        module_level.add(node.module)
-                leaked = [name for name in module_level if any(name == ban or name.startswith(ban + ".") for ban in banned)]
-                assert not leaked, f"{path} imports a higher layer at module level: {leaked}"
-                continue
-            assert not hit, f"{path} imports a layer it must not: {hit}"
+                module_level = {
+                    node.module
+                    for node in tree.body
+                    if isinstance(node, ast.ImportFrom) and node.module and node.level == 0
+                }
+                assert "aus_cart_mcp.watch.register" not in module_level
 
 
 def test_root_core_modules_are_scanned():

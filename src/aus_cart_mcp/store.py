@@ -89,7 +89,13 @@ class Store:
         with self._connect() as db:
             db.executescript(_SCHEMA)
 
+    @property
+    def path(self) -> str:
+        """The SQLite file. Other layers open their own tables here; they do not read ``_path``."""
+        return self._path
+
     def _connect(self) -> sqlite3.Connection:
+
         db = sqlite3.connect(self._path, timeout=10)
         db.execute("PRAGMA foreign_keys = ON")
         db.execute("PRAGMA journal_mode = WAL")
