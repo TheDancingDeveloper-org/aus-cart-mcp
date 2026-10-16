@@ -55,8 +55,9 @@ async def test_cart_cache_is_dropped_on_write(store, gateway, mock_state):
     tenant, _ = store.create_tenant_sync("t")
     await gateway.connect(tenant, "woolworths", parse_cookie_header(signed_in_cookie(mock_state)))
     assert (await gateway.cart(tenant, "woolworths")).items == []
-    cart = await gateway.add(tenant, "woolworths", {"888140": 1})
-    assert [i.product_id for i in cart.items] == ["888140"]
+    outcome = await gateway.add(tenant, "woolworths", {"888140": 1})
+    assert outcome["status"] == "synced"
+    assert [i["product_id"] for i in outcome["cart"]["items"]] == ["888140"]
     assert [i.product_id for i in (await gateway.cart(tenant, "woolworths")).items] == ["888140"]
 
 

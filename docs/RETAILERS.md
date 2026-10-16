@@ -39,6 +39,13 @@ With this method the server doesn't handle retailer passwords.
   - one request every ~1.5–2 s per retailer, shared by all customers;
   - at most 30 products per cart update;
   - a 30-minute pause after any block.
+- **Pending cart:** every add, quantity change and removal is recorded per customer
+  before it is sent. While the retailer is paused, or the daily cap is spent, the
+  write stays `pending` and the tool says so (`status`, `reason`, `retry_after`).
+  `sync_cart` re-reads the live cart and sends only the difference, so a product
+  already in the cart is not added twice. A refusal with a message is `failed` and
+  is not retried. `get_cart` returns the live cart plus those ops. Settled rows are
+  dropped after 14 days. There is no checkout.
 - **Covered today:** search and the cart.
 - **Mock and fixtures:** `aus_cart_mcp.mock.woolworths`, built from responses recorded on the verified date (`src/aus_cart_mcp/mock/data/woolworths/`).
 
