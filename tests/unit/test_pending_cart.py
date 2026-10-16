@@ -95,3 +95,54 @@ async def test_newer_write_supersedes(store, make_gateway, mock_state):
     ops = await store.list_pending(tenant.id, "woolworths", states=("pending", "superseded"))
     assert [o["state"] for o in ops] == ["superseded", "pending"]
     assert ops[1]["op"] == "set" and ops[1]["quantity"] == 5
+
+
+async def test_two_paused_adds_of_the_same_product_both_land(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(cooloff=600)
+    tenant = await _connect(store, gateway, mock_state)
+    gateway._trip("woolworths")
+    await gateway.add(tenant, "woolworths", {"888140": 2})
+    await gateway.add(tenant, "woolworths", {"888140": 1})
+    ops = await store.list_pending(tenant.id, "woolworths", states=("pending",))
+    assert [o["quantity"] for o in ops] == [2, 1]
+    clock.now += 601
+    cart = await gateway.sync(tenant, "woolworths")
+    assert [(i.product_id, i.quantity) for i in cart.items] == [("888140", 3)]
+
+
+async def test_a_set_replaces_paused_adds_and_is_not_applied_twice(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(cooloff=600)
+    tenant = await _connect(store, gateway, mock_state)
+    gateway._trip("woolworths")
+    await gateway.add(tenant, "woolworths", {"888140": 2})
+    await gateway.set_quantities(tenant, "woolworths", {"888140": 5})
+    ops = await store.list_pending(tenant.id, "woolworths", states=("pending", "superseded"))
+    assert [o["state"] for o in ops] == ["superseded", "pending"]
+    clock.now += 601
+    cart = await gateway.sync(tenant, "woolworths")
+    assert [(i.product_id, i.quantity) for i in cart.items] == [("888140", 5)]
+    again = await gateway.sync(tenant, "woolworths")
+    assert [(i.product_id, i.quantity) for i in again.items] == [("888140", 5)]
+
+
+async def test_one_refused_product_does_not_fail_the_other(store, gateway, mock_state):
+    tenant = await _connect(store, gateway, mock_state)
+    mock_state.reject_stockcodes = {888140}
+    outcome = await gateway.add(tenant, "woolworths", {"888140": 1, "888141": 2})
+    assert outcome["status"] == "pending" and outcome["permanent"] is True
+    ops = {o["product_id"]: o["state"] for o in await gateway.pending(tenant, "woolworths")}
+    assert ops == {"888140": "failed"}
+    cart = outcome["cart"]
+    assert [(i["product_id"], i["quantity"]) for i in cart["items"]] == [("888141", 2)]
+
+
+async def test_get_cart_reports_pending_ops_while_paused(store, make_gateway, mock_state):
+    gateway = make_gateway(cooloff=600)
+    tenant = await _connect(store, gateway, mock_state)
+    gateway._trip("woolworths")
+    await gateway.add(tenant, "woolworths", {"888140": 1})
+    rows = await gateway.store.list_pending(tenant.id, "woolworths")
+    assert rows and rows[0]["state"] == "pending"
+    # Failed rows are kept, not purged with the settled ones.
+    await gateway.store.mark_pending(rows[0]["id"], "failed", "no")
+    assert await gateway.store.purge_pending(older_than_days=0) == 0

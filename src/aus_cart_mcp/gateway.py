@@ -414,17 +414,13 @@ class Gateway:
         retailer = get_retailer(retailer_key)
         if not items:
             raise RetailerError("no items given")
-        ids = await self.store.enqueue_pending(tenant.id, retailer.key, op, items)
+        base = await self._quantities_before_write(tenant, retailer.key)
+        ids = await self.store.enqueue_pending(tenant.id, retailer.key, op, items, base=base)
         await self.store.purge_pending()
         left = self._pause_left(retailer.key)
         if left > 0:
             await self.store.record_usage(tenant.id, tool, retailer.key, True, 0)
-            return {
-                "status": "pending",
-                "reason": self._paused_message(retailer.key, self._clock()),
-                "retry_after": int(left),
-                "op_ids": ids,
-            }
+            return self._pending_result(ids, self._paused_message(retailer.key, self._clock()), int(left))
         try:
             cart = await self.sync(tenant, retailer.key, tool=tool)
         except RetailerError as exc:
@@ -433,36 +429,52 @@ class Gateway:
                 for op_id in ids:
                     await self.store.mark_pending(op_id, "failed", str(exc))
                 raise
-            # A block stays pending and retries. Any other refusal was recorded by sync.
-            permanent = not isinstance(exc, Blocked)
-            return {
-                "status": "pending",
-                "reason": str(exc),
-                "retry_after": None if permanent else (int(left) if left else None),
-                "permanent": permanent,
-                "op_ids": ids,
-            }
-        open_ops = await self.store.list_pending(tenant.id, retailer.key)
+            if isinstance(exc, Blocked):
+                return self._pending_result(ids, str(exc), int(left) if left else None)
+            # sync records a refusal per product and returns the cart; this is a hard failure
+            for op_id in ids:
+                await self.store.mark_pending(op_id, "failed", str(exc))
+            return self._pending_result(ids, str(exc), None, permanent=True)
+        return await self._outcome_for(tenant, retailer.key, ids, cart)
+
+    def _pending_result(self, ids, reason, retry_after, *, permanent=False, cart=None) -> dict:
+        out = {"status": "pending", "reason": reason, "retry_after": retry_after, "op_ids": ids}
+        if permanent:
+            out["permanent"] = True
+        if cart is not None:
+            out["cart"] = cart.to_dict() if hasattr(cart, "to_dict") else cart
+        return out
+
+    async def _quantities_before_write(self, tenant: Tenant, retailer_key: str) -> dict[str, float]:
+        """Quantities the write is counted from. No upstream call while the retailer is paused."""
+        cached = self._cached(("cart", tenant.id, retailer_key))
+        if cached is not None:
+            return {i.product_id: i.quantity for i in cached.items}
+        if self._pause_left(retailer_key) > 0:
+            return {}
+        try:
+            cart = await self.cart(tenant, retailer_key)
+        except RetailerError:
+            return {}
+        return {i.product_id: i.quantity for i in cart.items}
+
+    async def _outcome_for(self, tenant, retailer_key, ids, cart) -> dict:
+        open_ops = await self.store.list_pending(tenant.id, retailer_key)
         failed = [o for o in open_ops if o["id"] in ids and o["state"] == "failed"]
         still = [o for o in open_ops if o["id"] in ids and o["state"] == "pending"]
+        if not failed and not still:
+            return {"status": "synced", "reason": "", "retry_after": None, "op_ids": ids, "cart": cart.to_dict()}
+        reason = (failed or still)[0]["reason"] or ("the retailer rejected the change" if failed else "not synced yet")
+        out = {
+            "status": "pending",
+            "reason": reason,
+            "retry_after": None if failed and not still else (int(self._pause_left(retailer_key)) or None),
+            "op_ids": ids,
+            "cart": cart.to_dict(),
+        }
         if failed and not still:
-            return {
-                "status": "pending",
-                "reason": failed[0]["reason"] or "the retailer rejected the change",
-                "retry_after": None,
-                "permanent": True,
-                "op_ids": ids,
-                "cart": cart.to_dict(),
-            }
-        if still:
-            return {
-                "status": "pending",
-                "reason": still[0]["reason"] or "not synced yet",
-                "retry_after": int(self._pause_left(retailer.key)) or None,
-                "op_ids": ids,
-                "cart": cart.to_dict(),
-            }
-        return {"status": "synced", "reason": "", "retry_after": None, "op_ids": ids, "cart": cart.to_dict()}
+            out["permanent"] = True
+        return out
 
     async def add(self, tenant: Tenant, retailer_key: str, wanted: dict[str, float]) -> dict:
         """Record an add, then sync it onto the live cart when the retailer isn't paused."""
@@ -475,10 +487,31 @@ class Gateway:
     async def pending(self, tenant: Tenant, retailer_key: str) -> list[dict]:
         retailer = get_retailer(retailer_key)
         await self.store.record_usage(tenant.id, "get_pending_cart", retailer.key, True, 0)
-        return await self.store.list_pending(tenant.id, retailer.key)
+        rows = await self.store.list_pending(tenant.id, retailer.key)
+        return [{k: v for k, v in row.items() if k != "base_quantity"} for row in rows]
+
+    def _fold(self, current: dict[str, float], ops: list[dict]) -> dict[str, float]:
+        """Target quantities from the live cart.
+
+        Each add stores the live quantity it was counted from. If the cart is already
+        at or past base + increment, that add has landed and is not sent again. Two
+        adds of the same product each contribute once. A set replaces the line, and
+        drops adds that came before it (those are superseded at enqueue).
+        """
+        desired = dict(current)
+        for op in ops:
+            pid, qty = op["product_id"], float(op["quantity"])
+            if op["op"] == "set":
+                desired[pid] = qty
+                continue
+            base = float(op["base_quantity"]) if op.get("base_quantity") is not None else desired.get(pid, 0)
+            aimed = base + qty
+            if desired.get(pid, 0) + 1e-9 < aimed:
+                desired[pid] = aimed
+        return desired
 
     async def sync(self, tenant: Tenant, retailer_key: str, *, tool: str = "sync_cart") -> Cart:
-        """Push pending ops. Re-read the live cart and send only the difference."""
+        """Push pending ops. Re-read the live cart and send only the difference, per product."""
         retailer = get_retailer(retailer_key)
         left = self._pause_left(retailer.key)
         if left > 0:
@@ -489,28 +522,27 @@ class Gateway:
             live = await r.cart(conn.http)
             current = {i.product_id: i.quantity for i in live.items}
             ops = await self.store.list_pending(tenant.id, r.key, states=("pending",))
-            # Fold in order from the live snapshot. An add increments; a set replaces.
-            # Only the difference is sent, so a quantity already in the cart is not added twice.
-            desired = dict(current)
+            desired = self._fold(current, ops)
+            by_product: dict[str, list[dict]] = {}
             for op in ops:
-                pid, qty = op["product_id"], float(op["quantity"])
-                if op["op"] == "add":
-                    desired[pid] = desired.get(pid, 0) + qty
-                else:
-                    desired[pid] = qty
-            delta = {pid: qty for pid, qty in desired.items() if abs(qty - current.get(pid, 0)) > 1e-9}
-            if delta:
+                by_product.setdefault(op["product_id"], []).append(op)
+            for pid, group in by_product.items():
+                target = desired.get(pid, 0)
+                if abs(target - current.get(pid, 0)) <= 1e-9:
+                    for op in group:
+                        await self.store.mark_pending(op["id"], "synced", "")
+                    continue
                 try:
-                    await r.set_quantities(conn.http, delta)
+                    await r.set_quantities(conn.http, {pid: target})
                 except RetailerError as exc:
                     if isinstance(exc, Blocked):
                         raise
-                    for op in ops:
+                    for op in group:
                         await self.store.mark_pending(op["id"], "failed", str(exc))
-                    self._forget(tenant.id, r.key, "cart")
-                    return await r.cart(conn.http)
-            for op in ops:
-                await self.store.mark_pending(op["id"], "synced", "")
+                    continue
+                for op in group:
+                    await self.store.mark_pending(op["id"], "synced", "")
+                current[pid] = target
             self._forget(tenant.id, r.key, "cart")
             return await r.cart(conn.http)
 

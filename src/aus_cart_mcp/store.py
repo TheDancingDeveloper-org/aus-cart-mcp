@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS pending_ops (
     op TEXT NOT NULL,
     product_id TEXT NOT NULL,
     quantity REAL NOT NULL,
+    base_quantity REAL,
     state TEXT NOT NULL,
     reason TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
@@ -220,23 +221,37 @@ class Store:
 
     PENDING_TTL_DAYS = 14
 
-    async def enqueue_pending(self, tenant_id: int, retailer: str, op: str, items: dict[str, float]) -> list[int]:
-        """Record a cart write. A newer open op for the same product supersedes the older one."""
+    async def enqueue_pending(
+        self,
+        tenant_id: int,
+        retailer: str,
+        op: str,
+        items: dict[str, float],
+        *,
+        base: dict[str, float] | None = None,
+    ) -> list[int]:
+        """Record a cart write.
+
+        An add keeps every earlier pending add. A set replaces the line, so it
+        supersedes earlier pending ops for that product. Failed ops are never touched.
+        """
         now = _now()
+        bases = base or {}
 
         def fn(db):
             ids = []
             for product_id, quantity in items.items():
-                db.execute(
-                    "UPDATE pending_ops SET state = 'superseded', updated_at = ? "
-                    "WHERE tenant_id = ? AND retailer = ? AND product_id = ? AND state = 'pending'",
-                    (now, tenant_id, retailer, product_id),
-                )
+                if op == "set":
+                    db.execute(
+                        "UPDATE pending_ops SET state = 'superseded', updated_at = ? "
+                        "WHERE tenant_id = ? AND retailer = ? AND product_id = ? AND state = 'pending'",
+                        (now, tenant_id, retailer, product_id),
+                    )
                 cur = db.execute(
                     "INSERT INTO pending_ops "
-                    "(tenant_id, retailer, op, product_id, quantity, state, reason, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, 'pending', '', ?, ?)",
-                    (tenant_id, retailer, op, product_id, quantity, now, now),
+                    "(tenant_id, retailer, op, product_id, quantity, base_quantity, state, reason, "
+                    "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', '', ?, ?)",
+                    (tenant_id, retailer, op, product_id, quantity, bases.get(product_id), now, now),
                 )
                 ids.append(cur.lastrowid)
             return ids
@@ -250,7 +265,7 @@ class Store:
 
         def fn(db):
             rows = db.execute(
-                "SELECT id, op, product_id, quantity, state, reason, created_at, updated_at "
+                "SELECT id, op, product_id, quantity, base_quantity, state, reason, created_at, updated_at "
                 f"FROM pending_ops WHERE tenant_id = ? AND retailer = ? AND state IN ({placeholders}) ORDER BY id",
                 (tenant_id, retailer, *states),
             ).fetchall()
@@ -260,10 +275,11 @@ class Store:
                     "op": r[1],
                     "product_id": r[2],
                     "quantity": r[3],
-                    "state": r[4],
-                    "reason": r[5],
-                    "created_at": r[6],
-                    "updated_at": r[7],
+                    "base_quantity": r[4],
+                    "state": r[5],
+                    "reason": r[6],
+                    "created_at": r[7],
+                    "updated_at": r[8],
                 }
                 for r in rows
             ]
@@ -285,7 +301,7 @@ class Store:
 
         def fn(db):
             cur = db.execute(
-                "DELETE FROM pending_ops WHERE state IN ('synced', 'superseded', 'failed') AND updated_at < ?",
+                "DELETE FROM pending_ops WHERE state IN ('synced', 'superseded') AND updated_at < ?",
                 (cutoff,),
             )
             return cur.rowcount
