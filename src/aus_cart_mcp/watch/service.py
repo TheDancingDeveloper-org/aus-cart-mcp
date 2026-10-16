@@ -6,17 +6,15 @@ path themselves. This module must not import ui.
 
 from __future__ import annotations
 
-from aus_cart_mcp.core.service import CoreService
 from aus_cart_mcp.gateway import Gateway
 from aus_cart_mcp.store import Store, Tenant
 from aus_cart_mcp.watch.ledger import Ledger
 
 
 class WatchService:
-    def __init__(self, store: Store, gateway: Gateway, core: CoreService):
+    def __init__(self, store: Store, gateway: Gateway):
         self.store = store
         self.gateway = gateway
-        self.core = core
         self.ledger = Ledger(store.path)
 
     async def list_tracked(self, tenant: Tenant, retailer: str) -> list[dict]:
