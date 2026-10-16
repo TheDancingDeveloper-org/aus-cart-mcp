@@ -3,9 +3,9 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --locked --no-dev --no-install-project
+RUN uv sync --locked --no-dev --all-extras --no-install-project
 COPY src ./src
-RUN uv sync --locked --no-dev
+RUN uv sync --locked --no-dev --all-extras
 
 RUN chmod -R a+rX /app && useradd --system --uid 10001 auscart && mkdir -p /data && chown auscart /data
 USER auscart

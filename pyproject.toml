@@ -15,10 +15,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The watch layer's own dependencies land with the subtree. The extra exists now
-# so installs and CI can select the layer before it has any.
-watch = []
-# The cartwatch pages: templates, form uploads, and the receipt/Telegram extras.
+# Watch sub-flags. `telegram` sends alerts; `receipts` OCRs a photo. Both stay
+# off unless AUS_CART_MCP_FEATURES names them. The HTTP client is already a core dep.
+watch = [
+    "httpx>=0.28",  # already a core dep; kept so the extra is never empty
+    "python-telegram-bot>=21",  # the `telegram` sub-flag
+    "pytesseract>=0.3",  # the `receipts` sub-flag (needs the tesseract binary at runtime)
+]
+# The cartwatch pages: templates and form uploads. Receipt OCR and Telegram
+# are the watch extra; ui turns the pages on.
 ui = ["jinja2>=3.1", "python-multipart>=0.0.9"]
 
 [dependency-groups]

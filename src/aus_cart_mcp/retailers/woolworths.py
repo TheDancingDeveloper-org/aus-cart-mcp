@@ -25,6 +25,7 @@ from aus_cart_mcp.retailers.base import (
     Cart,
     CartItem,
     Product,
+    RetailerConstants,
     RetailerError,
     RetailerInfo,
     SessionRequired,
@@ -42,6 +43,8 @@ _API_HEADERS = {"Accept": "application/json, text/plain, */*"}
 
 
 class Woolworths:
+    # Published Woolworths numbers, not watch policy. A tenant may override them.
+    constants = RetailerConstants(delivery_threshold=50.0, specials_day="wednesday")
     info = RetailerInfo(
         key="woolworths",
         name="Woolworths",

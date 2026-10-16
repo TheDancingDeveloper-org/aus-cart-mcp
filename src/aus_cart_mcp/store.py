@@ -314,7 +314,12 @@ class Store:
 
     async def purge_pending(self, older_than_days: int | None = None) -> int:
         days = self.PENDING_TTL_DAYS if older_than_days is None else older_than_days
-        cutoff = (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days)).isoformat(timespec="seconds")
+        # Rows are stamped at seconds precision. A cutoff of "now" at that same
+        # precision is not strictly older, so subtract one extra second: a row
+        # written in the current second survives `older_than_days=0`.
+        cutoff = (
+            datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days, seconds=1)
+        ).isoformat(timespec="seconds")
 
         def fn(db):
             cur = db.execute(

@@ -18,8 +18,8 @@ Rules:
   A test scans the source, so a forbidden import fails even when no test runs it.
 - `ui` implies `watch`, because the pages read the watch data.
 - Every `watch` record is keyed by (tenant, retailer). Product ids are
-  retailer-scoped, every watch tool takes a `retailer` argument, and anything
-  specific to one retailer (thresholds, specials day) lives on that retailer's
+  retailer-scoped, every watch tool takes a `retailer` argument (defaulting to the only configured retailer, and an error when more than one is configured and none is named), and anything
+  specific to one retailer (thresholds, specials day) lives on that retailer's `RetailerConstants` (`delivery_threshold`, `specials_day`), overridable per tenant through `CoreService.constants_for`, and
   adapter rather than in `watch`.
 - The household shopping list and checkout stay outside this repo. Checkout is
   never automated.

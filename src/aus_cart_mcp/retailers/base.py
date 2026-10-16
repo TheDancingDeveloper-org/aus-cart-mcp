@@ -128,12 +128,38 @@ class RetailerInfo:
         return {**asdict(self), "capabilities": list(self.capabilities)}
 
 
+@dataclass(frozen=True)
+class RetailerConstants:
+    """Numbers that belong to one retailer, not to the watch layer.
+
+    Watch code reads these (with a per-tenant override) instead of hard-coding
+    a delivery threshold or a specials day. ``None`` means the retailer has not
+    published that number.
+    """
+
+    delivery_threshold: float | None = None  # dollars; free or minimum delivery
+    specials_day: str = ""  # weekday the weekly specials start, e.g. "wednesday"
+
+    def overridden(self, overrides: dict) -> RetailerConstants:
+        """Apply a tenant's overrides. Unknown keys are ignored. A bad type is ignored."""
+        threshold = overrides.get("delivery_threshold", self.delivery_threshold)
+        day = overrides.get("specials_day", self.specials_day)
+        try:
+            threshold = None if threshold is None else float(threshold)
+        except (TypeError, ValueError):
+            threshold = self.delivery_threshold
+        if not isinstance(day, str):
+            day = self.specials_day
+        return RetailerConstants(delivery_threshold=threshold, specials_day=day)
+
+
 class Retailer(Protocol):
     """One retailer's mapping onto plain HTTP."""
 
     info: RetailerInfo
     base_url: str
     user_agent: str
+    constants: RetailerConstants
 
     @property
     def key(self) -> str: ...
