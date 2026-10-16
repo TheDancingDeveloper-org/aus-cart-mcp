@@ -19,6 +19,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from aus_cart_mcp import __version__, config, features
+from aus_cart_mcp.core.service import CoreService
 from aus_cart_mcp.gateway import Gateway, Limits
 from aus_cart_mcp.retailers import CATALOGUE, RETAILERS
 from aus_cart_mcp.retailers.base import Blocked, RetailerError
@@ -83,6 +84,7 @@ def build(
 ) -> tuple[MCPServer, Gateway]:
     gateway = gateway or Gateway(store)
     selected = selected or features.load()
+    core = CoreService(store, gateway, selected)
     mcp = MCPServer(SERVER_NAME, instructions=INSTRUCTIONS, version=__version__)
     register = mcp.tool
 
@@ -114,7 +116,7 @@ def build(
     @tool()
     async def server_info() -> str:
         """Which layers and retailers this server is running. Needs no retailer session."""
-        return result({"version": __version__, "features": selected.to_dict(), "retailers": sorted(RETAILERS)})
+        return result(core.info())
 
     @tool()
     async def list_retailers(include_planned: bool = False) -> str:

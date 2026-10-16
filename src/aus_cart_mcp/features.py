@@ -6,8 +6,10 @@ One image ships every layer. ``AUS_CART_MCP_FEATURES`` selects them at runtime:
 - ``watch`` — price tracking, history, alerts (off unless named);
 - ``ui`` — the optional cartwatch pages (off unless named).
 
-Sub-flags sit in the same list and do nothing until their layer exists:
-``telegram`` (watch's Telegram notifier) and ``receipts`` (receipt OCR).
+Sub-flags sit in the same list and select optional behaviour of ``watch``:
+``telegram`` (the Telegram notifier) and ``receipts`` (receipt OCR). Their
+clients install with the ``watch`` extra; naming the flag without that extra
+is rejected at startup of the watch layer, not here.
 
 ``core`` may not import ``watch`` or ``ui``. ``watch`` may not import ``ui``.
 """
