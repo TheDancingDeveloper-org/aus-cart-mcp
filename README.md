@@ -29,6 +29,7 @@ retailer.
   | `set_cart_quantities` | record exact quantities (0 removes); same status |
   | `get_pending_cart` | writes recorded but not yet on the retailer's cart |
   | `sync_cart` | push those writes; applies only the difference from the live cart |
+  | `clear_pending` | drop refused writes (one product, or all) so they stop being reported |
   | `connection_status` | whether the retailer session is connected |
   | `connect_session` / `disconnect_session` | connect or forget a retailer session (admin) |
   | `get_products` | look up to 100 products by id in one or a few upstream requests |

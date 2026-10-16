@@ -166,9 +166,56 @@ async def test_a_refused_product_keeps_the_batch_pending(store, gateway, mock_st
     outcome = await gateway.add(tenant, "woolworths", {"888140": 1, "888141": 2})
     assert outcome["status"] == "pending" and outcome["permanent"] is True
     assert [(i["product_id"], i["quantity"]) for i in outcome["cart"]["items"]] == [("888141", 2)]
-    # A later add of a different product must not report synced while the refusal is still open.
-    follow = await gateway.add(tenant, "woolworths", {"888142": 1})
-    assert follow["status"] == "pending" and follow["permanent"] is True
+
+
+async def test_sync_cart_does_not_report_synced_when_a_product_was_refused(store, gateway, mock_state):
+    """Blocker 1: sync_cart's own status must count a failed row, not only pending ones."""
+    import json
+
+    from mcp.server.mcpserver import Context
+
+    from aus_cart_mcp.server import build
+
+    tenant = await _connect(store, gateway, mock_state)
+    mock_state.reject_stockcodes = {888140}
+    added = await gateway.add(tenant, "woolworths", {"888140": 1})
+    assert added["status"] == "pending" and added["permanent"] is True
+    mcp, _ = build(store, gateway)
+
+    class _State:
+        tenant = None
+
+    class _Request:
+        state = _State()
+
+    class _RC:
+        request = _Request()
+
+    ctx = Context(request_context=_RC())
+    ctx.request_context.request.state.tenant = tenant
+    result = await mcp.call_tool("sync_cart", {"retailer": "woolworths"}, context=ctx)
+    payload = json.loads(result.content[0].text)
+    assert payload["status"] != "synced"
+    assert payload["status"] == "pending"
+    assert payload["permanent"] is True
+    assert payload["reason"]
+
+
+async def test_a_failed_row_does_not_poison_later_adds_and_can_be_cleared(store, gateway, mock_state):
+    """Blocker 2: a refusal is scoped to that product, and clear_pending removes it."""
+    tenant = await _connect(store, gateway, mock_state)
+    mock_state.reject_stockcodes = {888140}
+    refused = await gateway.add(tenant, "woolworths", {"888140": 1})
+    assert refused["permanent"] is True
+    mock_state.reject_stockcodes = set()
+    later = await gateway.add(tenant, "woolworths", {"888142": 1})
+    assert later["status"] == "synced"
+    assert later.get("permanent") is not True
+    still = await gateway.pending(tenant, "woolworths")
+    assert [o["product_id"] for o in still] == ["888140"]
+    cleared = await gateway.clear_failed(tenant, "woolworths", "888140")
+    assert cleared["cleared"] == 1
+    assert await gateway.pending(tenant, "woolworths") == []
 
 
 async def test_failed_ops_are_purged_after_the_ttl(store, gateway, mock_state):

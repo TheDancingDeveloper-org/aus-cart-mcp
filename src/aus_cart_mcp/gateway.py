@@ -463,16 +463,6 @@ class Gateway:
         failed = [o for o in open_ops if o["id"] in ids and o["state"] == "failed"]
         still = [o for o in open_ops if o["id"] in ids and o["state"] == "pending"]
         if not failed and not still:
-            others = [o for o in open_ops if o["state"] == "failed"]
-            if others:
-                return {
-                    "status": "pending",
-                    "reason": others[0]["reason"] or "the retailer rejected another change",
-                    "retry_after": None,
-                    "permanent": True,
-                    "op_ids": ids,
-                    "cart": cart.to_dict(),
-                }
             return {"status": "synced", "reason": "", "retry_after": None, "op_ids": ids, "cart": cart.to_dict()}
         reason = (failed or still)[0]["reason"] or ("the retailer rejected the change" if failed else "not synced yet")
         out = {
@@ -493,6 +483,14 @@ class Gateway:
 
     async def set_quantities(self, tenant: Tenant, retailer_key: str, quantities: dict[str, float]) -> dict:
         return await self._record_and_sync(tenant, retailer_key, "set", quantities, "set_cart_quantities")
+
+    async def clear_failed(self, tenant: Tenant, retailer_key: str, product_id: str | None = None) -> dict:
+        """Mark refused rows superseded so a later add is not stuck reporting them. Pending rows stay."""
+        retailer = get_retailer(retailer_key)
+        cleared = await self.store.clear_pending(tenant.id, retailer.key, product_id or None)
+        await self.store.record_usage(tenant.id, "clear_pending", retailer.key, True, 0)
+        rows = await self.pending(tenant, retailer.key)
+        return {"cleared": cleared, "pending": rows}
 
     async def pending(self, tenant: Tenant, retailer_key: str) -> list[dict]:
         retailer = get_retailer(retailer_key)

@@ -286,6 +286,23 @@ class Store:
 
         return await self._run(fn)
 
+    async def clear_pending(self, tenant_id: int, retailer: str, product_id: str | None = None) -> int:
+        """Supersede failed rows (one product, or all). Pending rows are not cleared."""
+        now = _now()
+
+        def fn(db):
+            sql = (
+                "UPDATE pending_ops SET state = 'superseded', reason = 'cleared', updated_at = ? "
+                "WHERE tenant_id = ? AND retailer = ? AND state = 'failed'"
+            )
+            args: list = [now, tenant_id, retailer]
+            if product_id:
+                sql += " AND product_id = ?"
+                args.append(product_id)
+            return db.execute(sql, args).rowcount
+
+        return await self._run(fn)
+
     async def mark_pending(self, op_id: int, state: str, reason: str = "") -> None:
         now = _now()
         await self._run(

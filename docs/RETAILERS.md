@@ -44,7 +44,7 @@ With this method the server doesn't handle retailer passwords.
   write stays `pending` and the tool says so (`status`, `reason`, `retry_after`).
   `sync_cart` re-reads the live cart and sends only the difference, so a product
   already in the cart is not added twice. A refusal with a message is `failed` and
-  is not retried. `get_cart` returns the live cart plus those ops. Settled rows are
+  is not retried. `clear_pending` drops those refusals (they no longer mark later adds). `get_cart` returns the live cart plus those ops. Settled rows are
   dropped after 14 days. There is no checkout.
 - **Covered today:** search and the cart.
 - **Mock and fixtures:** `aus_cart_mcp.mock.woolworths`, built from responses recorded on the verified date (`src/aus_cart_mcp/mock/data/woolworths/`).
