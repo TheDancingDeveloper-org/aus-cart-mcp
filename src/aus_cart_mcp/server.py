@@ -21,7 +21,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from aus_cart_mcp import __version__, config
 from aus_cart_mcp.gateway import Gateway, Limits
 from aus_cart_mcp.retailers import CATALOGUE, RETAILERS
-from aus_cart_mcp.retailers.base import RetailerError
+from aus_cart_mcp.retailers.base import Blocked, RetailerError
 from aus_cart_mcp.store import Store, Tenant
 
 SERVER_NAME = "aus-cart"
@@ -131,11 +131,20 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
     def _outcome(outcome: dict) -> dict:
         return {k: v for k, v in outcome.items() if k != "op_ids"}
 
+    def _public(rows: list[dict]) -> list[dict]:
+        return [{k: v for k, v in row.items() if k != "base_quantity"} for row in rows]
+
+    def _public(rows: list[dict]) -> list[dict]:
+        return [{k: v for k, v in row.items() if k != "base_quantity"} for row in rows]
+
     async def _get_cart(ctx: Context, retailer: str) -> str:
         tenant = await tenant_of(ctx)
-        cart = await gateway.cart(tenant, retailer)
-        pending = await gateway.store.list_pending(tenant.id, retailer)
-        return result({**cart.to_dict(), "pending": pending})
+        try:
+            live = (await gateway.cart(tenant, retailer)).to_dict()
+        except Blocked as exc:
+            live = {"items": [], "subtotal": None, "total": None, "savings": None, "unavailable": str(exc)}
+        pending = _public(await gateway.store.list_pending(tenant.id, retailer))
+        return result({**live, "pending": pending})
 
     async def _add(items: list[dict], ctx: Context, retailer: str) -> str:
         outcome = await gateway.add(await tenant_of(ctx), retailer, parse_quantities(items))
@@ -164,7 +173,7 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
         If the retailer is paused this raises and the writes stay pending."""
         tenant = await tenant_of(ctx)
         cart = await gateway.sync(tenant, retailer)
-        pending = await gateway.store.list_pending(tenant.id, retailer)
+        pending = _public(await gateway.store.list_pending(tenant.id, retailer))
         status = "synced" if not any(o["state"] == "pending" for o in pending) else "pending"
         return result({**cart.to_dict(), "status": status, "pending": pending})
 

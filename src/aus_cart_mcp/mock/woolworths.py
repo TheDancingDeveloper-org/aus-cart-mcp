@@ -50,6 +50,7 @@ class MockState:
     carts: dict[str, dict[int, float]] = field(default_factory=dict)
     blocked: bool = False
     reject_update: bool = False
+    reject_stockcodes: set = None
     requests: list[str] = field(default_factory=list)
     catalogue: dict[int, dict] = field(default_factory=dict)
 
@@ -66,6 +67,7 @@ class MockState:
         self.carts.clear()
         self.blocked = False
         self.reject_update = False
+        self.reject_stockcodes = set()
         self.requests.clear()
 
 
@@ -159,10 +161,14 @@ def create_app(state: MockState | None = None) -> Starlette:
         sid = session_of(request)
         if sid is None:
             return JSONResponse({"Message": "Please sign in"}, status_code=200)
+        body = await request.json()
         if state.reject_update:
             return JSONResponse({"Message": "that product can't be added"}, status_code=200)
+        refused = {int(i["stockcode"]) for i in (body.get("items") or [])} & set(state.reject_stockcodes or ())
+        if refused:
+            return JSONResponse({"Message": "that product can't be added"}, status_code=200)
         cart = state.carts.setdefault(sid, {})
-        for item in (await request.json()).get("items") or []:
+        for item in body.get("items") or []:
             code, qty = int(item["stockcode"]), float(item["quantity"])
             if qty <= 0:
                 cart.pop(code, None)
