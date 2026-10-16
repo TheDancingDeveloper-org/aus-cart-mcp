@@ -146,17 +146,21 @@ def build(
 
     @tool()
     async def get_cart(ctx: Context, retailer: str | None = None) -> str:
-        """The user's cart: items, quantities and totals, plus writes still waiting to sync."""
+        """Show the live cart, plus any writes still waiting to sync."""
         return await _get_cart(ctx, retailer)
 
     @tool()
     async def get_pending_cart(ctx: Context, retailer: str | None = None) -> str:
-        """Writes recorded for this cart that are not on the retailer yet, or that the retailer refused."""
+        """Cart writes recorded but not yet on the retailer's cart.
+
+        pending retries later. failed is permanent and is not retried. synced ops are omitted."""
         return result(await core.pending(await tenant_of(ctx), _retailer(retailer)))
 
     @tool()
     async def sync_cart(ctx: Context, retailer: str | None = None) -> str:
-        """Push recorded writes to the retailer. Returns status synced or pending, plus reason and retry_after."""
+        """Push recorded writes. Re-reads the live cart and applies only the difference.
+
+        If the retailer is paused this raises and the writes stay pending."""
         return result(await core.sync(await tenant_of(ctx), _retailer(retailer)))
 
     @tool()

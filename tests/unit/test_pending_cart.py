@@ -1,5 +1,7 @@
 """Pending cart: record every write, sync when the retailer isn't paused, never double-add."""
 
+import json
+
 import pytest
 
 from aus_cart_mcp.gateway import Gateway, Limits
@@ -170,8 +172,6 @@ async def test_a_refused_product_keeps_the_batch_pending(store, gateway, mock_st
 
 async def test_sync_cart_does_not_report_synced_when_a_product_was_refused(store, gateway, mock_state):
     """Blocker 1: sync_cart's own status must count a failed row, not only pending ones."""
-    import json
-
     from mcp.server.mcpserver import Context
 
     from aus_cart_mcp.server import build
@@ -237,3 +237,26 @@ async def test_failed_ops_are_purged_after_the_ttl(store, gateway, mock_state):
         db.close()
     assert await store.purge_pending(older_than_days=0) == 1
     assert await gateway.pending(tenant, "woolworths") == []
+
+
+async def test_sync_cart_raises_when_the_retailer_is_paused(store, make_gateway, mock_state):
+    """0.2.x: a pause is an error from sync_cart, not a pending payload."""
+    from mcp.server.mcpserver import Context
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    from aus_cart_mcp.server import build
+
+    gateway = make_gateway(cooloff=600)
+    tenant = await _connect(store, gateway, mock_state)
+    gateway._trip("woolworths")
+    mcp, _ = build(store, gateway)
+
+    class _RC:
+        class request:
+            class state:
+                tenant = None
+
+    ctx = Context(request_context=_RC())
+    ctx.request_context.request.state.tenant = tenant
+    with pytest.raises(ToolError, match="paus"):
+        await mcp.call_tool("sync_cart", {"retailer": "woolworths"}, context=ctx)
