@@ -67,6 +67,19 @@ def test_layers_do_not_import_upwards():
         for path in paths:
             used = imports_of(path)
             hit = [name for name in used if any(name == ban or name.startswith(ban + ".") for ban in banned)]
+            # server.py is the MCP adapter. It may import watch.register, and
+            # only inside the flag branch (the import is not at module level).
+            if path.name == "server.py" and layer == "core":
+                tree = ast.parse(path.read_text())
+                module_level = set()
+                for node in tree.body:
+                    if isinstance(node, ast.Import):
+                        module_level.update(a.name for a in node.names)
+                    elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                        module_level.add(node.module)
+                leaked = [name for name in module_level if any(name == ban or name.startswith(ban + ".") for ban in banned)]
+                assert not leaked, f"{path} imports a higher layer at module level: {leaked}"
+                continue
             assert not hit, f"{path} imports a layer it must not: {hit}"
 
 

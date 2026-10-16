@@ -51,11 +51,9 @@ def register(mcp, tool, store, gateway) -> None:
         return {"tenant": tenant.name, "retailer": retailer}
 
     async def _price(tenant: Tenant, retailer: str, product_id: str):
+        """The product with this exact id, or None. Never another search hit."""
         products = await gateway.search(tenant, retailer, product_id, limit=10, specials_only=False)
-        match = next((p for p in products if p.product_id == product_id), None)
-        if match is None and products:
-            match = products[0]
-        return match
+        return next((p for p in products if p.product_id == product_id), None)
 
     @tool()
     async def list_tracked(ctx: Context, retailer: str | None = None) -> str:
@@ -64,7 +62,7 @@ def register(mcp, tool, store, gateway) -> None:
         chosen = resolve_retailer(retailer)
         items = [
             {"product_id": row.product_id, "name": row.name, "price": row.price}
-            for row in ledger.list(tenant.name, chosen)
+            for row in ledger.list(tenant.id, chosen)
         ]
         return json.dumps({**result_of(tenant, chosen), "items": items})
 
@@ -78,7 +76,7 @@ def register(mcp, tool, store, gateway) -> None:
         found = await _price(tenant, chosen, product_id)
         name = found.name if found is not None else ""
         price = found.price if found is not None else None
-        ledger.track(tenant.name, chosen, product_id, name=name, price=price)
+        ledger.track(tenant.id, chosen, product_id, name=name, price=price)
         return json.dumps({**result_of(tenant, chosen), "product_id": product_id, "tracked": True, "price": price})
 
     @tool()
@@ -86,7 +84,7 @@ def register(mcp, tool, store, gateway) -> None:
         """Stop watching a product for this account."""
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        ledger.untrack(tenant.name, chosen, product_id)
+        ledger.untrack(tenant.id, chosen, product_id)
         return json.dumps({**result_of(tenant, chosen), "product_id": product_id, "tracked": False})
 
     @tool()
@@ -94,7 +92,7 @@ def register(mcp, tool, store, gateway) -> None:
         """Latest observed price for a product this account tracks."""
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        rows = [row for row in ledger.list(tenant.name, chosen) if row.product_id == product_id]
+        rows = [row for row in ledger.list(tenant.id, chosen) if row.product_id == product_id]
         points = [{"price": row.price, "name": row.name} for row in rows]
         return json.dumps({**result_of(tenant, chosen), "product_id": product_id, "points": points})
 
@@ -105,39 +103,45 @@ def register(mcp, tool, store, gateway) -> None:
         chosen = resolve_retailer(retailer)
         deals = [
             {"product_id": row.product_id, "name": row.name, "price": row.price}
-            for row in ledger.list(tenant.name, chosen)
+            for row in ledger.list(tenant.id, chosen)
             if row.price is not None
         ]
         return json.dumps({**result_of(tenant, chosen), "deals": deals})
 
     @tool()
     async def suggest_items(ctx: Context, retailer: str | None = None) -> str:
-        """Placeholder: suggestions need the cart history this account has not imported."""
+        """Not available yet: suggestions need imported cart history, which this layer does not store."""
         tenant = await _tenant(ctx)
-        return json.dumps({**result_of(tenant, resolve_retailer(retailer)), "suggestions": []})
+        return json.dumps(
+            {**result_of(tenant, resolve_retailer(retailer)), "available": False, "reason": "not implemented"}
+        )
 
     @tool()
     async def recent_alerts(ctx: Context, retailer: str | None = None) -> str:
-        """Placeholder: alerts are not emitted by the in-process refresh yet."""
+        """Not available yet: the in-process refresh does not emit alerts."""
         tenant = await _tenant(ctx)
-        return json.dumps({**result_of(tenant, resolve_retailer(retailer)), "alerts": []})
+        return json.dumps(
+            {**result_of(tenant, resolve_retailer(retailer)), "available": False, "reason": "not implemented"}
+        )
 
     @tool()
     async def budget_status(ctx: Context, retailer: str | None = None) -> str:
-        """This account's watch traffic is metered by the core gateway, not a second budget."""
+        """Upstream requests this account has made today, from the core usage meter."""
         tenant = await _tenant(ctx)
-        return json.dumps({**result_of(tenant, resolve_retailer(retailer)), "upstream_today": 0})
+        chosen = resolve_retailer(retailer)
+        summary = await store.usage_summary(tenant.id, days=1)
+        return json.dumps({**result_of(tenant, chosen), "upstream_today": summary["upstream_requests"]})
 
     @tool(name="run_refresh", description="ADMIN: refresh tracked prices for this account against the retailer.")
     async def run_refresh(ctx: Context, retailer: str | None = None) -> str:
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
         refreshed = 0
-        for row in ledger.list(tenant.name, chosen):
+        for row in ledger.list(tenant.id, chosen):
             found = await _price(tenant, chosen, row.product_id)
             if found is None:
                 continue
-            if ledger.refresh(tenant.name, chosen, row.product_id, name=found.name, price=found.price):
+            if ledger.refresh(tenant.id, chosen, row.product_id, name=found.name, price=found.price):
                 refreshed += 1
         return json.dumps({**result_of(tenant, chosen), "refreshed": refreshed})
 

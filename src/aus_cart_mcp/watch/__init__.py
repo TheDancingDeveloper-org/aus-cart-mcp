@@ -1,3 +1,5 @@
-"""aus_cart_mcp.watch: a household grocery price tracker built on aus-cart-mcp."""
+"""The watch layer: per-tenant tracked prices, in-process, behind the feature flag.
 
-__version__ = "0.1.0"
+AGPL-3.0, same as the rest of aus-cart-mcp. The old cartwatch tree (its own
+licence, GUI and HTTP server) is not part of this package.
+"""
