@@ -463,6 +463,16 @@ class Gateway:
         failed = [o for o in open_ops if o["id"] in ids and o["state"] == "failed"]
         still = [o for o in open_ops if o["id"] in ids and o["state"] == "pending"]
         if not failed and not still:
+            others = [o for o in open_ops if o["state"] == "failed"]
+            if others:
+                return {
+                    "status": "pending",
+                    "reason": others[0]["reason"] or "the retailer rejected another change",
+                    "retry_after": None,
+                    "permanent": True,
+                    "op_ids": ids,
+                    "cart": cart.to_dict(),
+                }
             return {"status": "synced", "reason": "", "retry_after": None, "op_ids": ids, "cart": cart.to_dict()}
         reason = (failed or still)[0]["reason"] or ("the retailer rejected the change" if failed else "not synced yet")
         out = {
@@ -493,21 +503,24 @@ class Gateway:
     def _fold(self, current: dict[str, float], ops: list[dict]) -> dict[str, float]:
         """Target quantities from the live cart.
 
-        Each add stores the live quantity it was counted from. If the cart is already
-        at or past base + increment, that add has landed and is not sent again. Two
-        adds of the same product each contribute once. A set replaces the line, and
-        drops adds that came before it (those are superseded at enqueue).
+        Adds are applied in order and each contributes once, even when they were all
+        counted from the same cached quantity. An add is skipped only when the live
+        cart is already at the quantity that add was aiming for and no later pending
+        add of the same product still has to land. A set replaces the line.
         """
         desired = dict(current)
-        for op in ops:
+        for index, op in enumerate(ops):
             pid, qty = op["product_id"], float(op["quantity"])
             if op["op"] == "set":
                 desired[pid] = qty
                 continue
-            base = float(op["base_quantity"]) if op.get("base_quantity") is not None else desired.get(pid, 0)
-            aimed = base + qty
-            if desired.get(pid, 0) + 1e-9 < aimed:
-                desired[pid] = aimed
+            base = op.get("base_quantity")
+            aimed = (float(base) if base is not None else desired.get(pid, 0)) + qty
+            later = any(other["product_id"] == pid and other["op"] == "add" for other in ops[index + 1 :])
+            live = current.get(pid, 0)
+            if base is not None and not later and live + 1e-9 >= aimed and desired.get(pid, 0) + 1e-9 >= aimed:
+                continue
+            desired[pid] = desired.get(pid, 0) + qty
         return desired
 
     async def sync(self, tenant: Tenant, retailer_key: str, *, tool: str = "sync_cart") -> Cart:
