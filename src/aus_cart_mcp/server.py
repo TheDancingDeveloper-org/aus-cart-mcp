@@ -134,9 +134,6 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
     def _public(rows: list[dict]) -> list[dict]:
         return [{k: v for k, v in row.items() if k != "base_quantity"} for row in rows]
 
-    def _public(rows: list[dict]) -> list[dict]:
-        return [{k: v for k, v in row.items() if k != "base_quantity"} for row in rows]
-
     async def _get_cart(ctx: Context, retailer: str) -> str:
         tenant = await tenant_of(ctx)
         try:
@@ -174,8 +171,29 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
         tenant = await tenant_of(ctx)
         cart = await gateway.sync(tenant, retailer)
         pending = _public(await gateway.store.list_pending(tenant.id, retailer))
-        status = "synced" if not any(o["state"] == "pending" for o in pending) else "pending"
-        return result({**cart.to_dict(), "status": status, "pending": pending})
+        failed = [o for o in pending if o["state"] == "failed"]
+        waiting = [o for o in pending if o["state"] == "pending"]
+        if failed or waiting:
+            payload = {
+                **cart.to_dict(),
+                "status": "pending",
+                "reason": (failed or waiting)[0]["reason"]
+                or ("the retailer rejected the change" if failed else "not synced yet"),
+                "retry_after": None,
+                "pending": pending,
+            }
+            if failed and not waiting:
+                payload["permanent"] = True
+            return result(payload)
+        return result({**cart.to_dict(), "status": "synced", "reason": "", "retry_after": None, "pending": pending})
+
+    @tool()
+    async def clear_pending(ctx: Context, retailer: str = DEFAULT_RETAILER, product_id: str | None = None) -> str:
+        """Drop refused cart writes so they stop being reported. Omit product_id to clear every refusal.
+
+        Does not change the live cart. Pending (not yet tried) writes are left alone."""
+        cleared = await gateway.clear_failed(await tenant_of(ctx), retailer, product_id or None)
+        return result(cleared)
 
     @tool()
     async def add_to_cart(items: list[dict], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
