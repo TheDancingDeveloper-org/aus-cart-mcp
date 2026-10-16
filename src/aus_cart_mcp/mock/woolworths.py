@@ -15,6 +15,7 @@ POST /__mock/reset clears carts and sessions.
 
 from __future__ import annotations
 
+import base64
 import json
 import secrets
 from dataclasses import dataclass, field
@@ -172,11 +173,8 @@ def create_app(state: MockState | None = None) -> Starlette:
             return JSONResponse({"refreshed": False}, status_code=401)
         response = JSONResponse({"refreshed": True})
         # Synthetic JWT, `exp` only. Tests set state.heartbeat_exp; default is far ahead. Not a real token.
-        import base64
-        import json as _json
-
         exp = int(getattr(state, "heartbeat_exp", 2_000_000_000))
-        body = base64.urlsafe_b64encode(_json.dumps({"exp": exp}).encode()).decode().rstrip("=")
+        body = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
         response.set_cookie("wow-auth-token", f"h.{body}.s")
         return response
 

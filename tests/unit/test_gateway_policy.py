@@ -250,6 +250,28 @@ async def test_cart_refreshes_a_login_inside_ten_minutes_and_only_once(store, ma
     assert not Woolworths().login_expiring({"wow-auth-token": renewed}, clock.wall, within=600)
 
 
+async def test_a_renewed_login_is_renewed_again_in_its_own_window(store, make_gateway, mock_state, clock):
+    """One attempt per token, not per connection: the next expiry gets its own heartbeat."""
+    gateway = make_gateway(cart_ttl=0, shopper_ttl=0)
+    tenant, _ = store.create_tenant_sync("t")
+    cookies = parse_cookie_header(signed_in_cookie(mock_state))
+    cookies["wow-auth-token"] = _jwt(clock.wall + 5 * 60)
+    await gateway.connect(tenant, "woolworths", cookies)
+    mock_state.heartbeat_exp = clock.wall + 3600
+    await gateway.cart(tenant, "woolworths")
+    assert sum("heartbeat" in r for r in mock_state.requests) == 1
+
+    clock.wall += 55 * 60  # the renewed token is inside its own last 10 minutes
+    clock.now += 31
+    gateway._cache.clear()
+    mock_state.heartbeat_exp = clock.wall + 3600
+    await gateway.cart(tenant, "woolworths")
+    assert sum("heartbeat" in r for r in mock_state.requests) == 2
+    clock.now += 31  # still inside the new token's window: no third attempt
+    await gateway.cart(tenant, "woolworths")
+    assert sum("heartbeat" in r for r in mock_state.requests) == 2
+
+
 async def test_search_does_not_refresh_a_login(store, make_gateway, mock_state, clock):
     gateway = make_gateway(search_ttl=0)
     tenant, _ = store.create_tenant_sync("t")
