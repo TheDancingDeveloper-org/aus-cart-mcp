@@ -69,17 +69,18 @@ async def test_sign_in_connect_search_fill_and_clear(stack, store):
             .content[0]
             .text
         )
-        assert cart["items"] == [
+        assert cart["status"] == "synced"
+        assert cart["cart"]["items"] == [
             {"product_id": milk["product_id"], "name": milk["name"], "quantity": 2, "price": milk["price"]}
         ]
-        assert cart["total"] == pytest.approx(2 * milk["price"])
+        assert cart["cart"]["total"] == pytest.approx(2 * milk["price"])
 
         cleared = json.loads(
             (await c.call_tool("set_cart_quantities", {"items": [{"product_id": milk["product_id"], "quantity": 0}]}))
             .content[0]
             .text
         )
-        assert cleared["items"] == []
+        assert cleared["status"] == "synced" and cleared["cart"]["items"] == []
 
         status = json.loads((await c.call_tool("connection_status", {})).content[0].text)
         assert status["connected"] is True and status["first_name"] == "Jordan"
