@@ -24,9 +24,11 @@ retailer.
   |---|---|
   | `list_retailers` | the retailer index |
   | `search_products` | search a retailer's catalogue |
-  | `get_cart` | show the cart |
-  | `add_to_cart` | add products to the cart |
-  | `set_cart_quantities` | set exact quantities; 0 removes |
+  | `get_cart` | the live cart, plus writes still waiting to sync |
+  | `add_to_cart` | record an add, then sync it; returns `synced` or `pending` |
+  | `set_cart_quantities` | record exact quantities (0 removes); same status |
+  | `get_pending_cart` | writes recorded but not yet on the retailer's cart |
+  | `sync_cart` | push those writes; applies only the difference from the live cart |
   | `connection_status` | whether the retailer session is connected |
   | `connect_session` / `disconnect_session` | connect or forget a retailer session (admin) |
   | `get_products` | look up to 100 products by id in one or a few upstream requests |
@@ -39,7 +41,7 @@ retailer.
   - a customer's tools only ever act for them.
 - **Polite by design.** For each retailer, requests are serialised and spaced,
   there's a daily cap, and a circuit breaker pauses everything for 30 minutes
-  when the site pushes back. It never evades bot protection.
+  when the site pushes back. A cart write made during that pause is kept and sent once the pause ends, using the same calls and the same cap. It never evades bot protection.
 - **Metered.** Every tool call records its tool, retailer, outcome and the
   number of upstream requests it made, which is the basis for pay-per-use.
 - **Sign in on the retailer's site.** Customers sign in on the retailer's own site, on

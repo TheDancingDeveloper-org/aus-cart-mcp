@@ -404,28 +404,115 @@ class Gateway:
 
         return self._remember(key, await self._run(tenant, retailer.key, "get_cart", fn), self.limits.cart_ttl)
 
-    async def add(self, tenant: Tenant, retailer_key: str, wanted: dict[str, float]) -> Cart:
-        """Add on top of what is already in the cart."""
+    def _pause_left(self, retailer_key: str) -> float:
+        return max(0.0, self._throttle(retailer_key).blocked_until - self._clock())
+
+    async def _record_and_sync(
+        self, tenant: Tenant, retailer_key: str, op: str, items: dict[str, float], tool: str
+    ) -> dict:
+        """Record the write first, then try to push it. A pause never drops the op."""
         retailer = get_retailer(retailer_key)
+        if not items:
+            raise RetailerError("no items given")
+        ids = await self.store.enqueue_pending(tenant.id, retailer.key, op, items)
+        await self.store.purge_pending()
+        left = self._pause_left(retailer.key)
+        if left > 0:
+            await self.store.record_usage(tenant.id, tool, retailer.key, True, 0)
+            return {
+                "status": "pending",
+                "reason": self._paused_message(retailer.key, self._clock()),
+                "retry_after": int(left),
+                "op_ids": ids,
+            }
+        try:
+            cart = await self.sync(tenant, retailer.key, tool=tool)
+        except RetailerError as exc:
+            left = self._pause_left(retailer.key)
+            if isinstance(exc, SessionRequired):
+                for op_id in ids:
+                    await self.store.mark_pending(op_id, "failed", str(exc))
+                raise
+            # A block stays pending and retries. Any other refusal was recorded by sync.
+            permanent = not isinstance(exc, Blocked)
+            return {
+                "status": "pending",
+                "reason": str(exc),
+                "retry_after": None if permanent else (int(left) if left else None),
+                "permanent": permanent,
+                "op_ids": ids,
+            }
+        open_ops = await self.store.list_pending(tenant.id, retailer.key)
+        failed = [o for o in open_ops if o["id"] in ids and o["state"] == "failed"]
+        still = [o for o in open_ops if o["id"] in ids and o["state"] == "pending"]
+        if failed and not still:
+            return {
+                "status": "pending",
+                "reason": failed[0]["reason"] or "the retailer rejected the change",
+                "retry_after": None,
+                "permanent": True,
+                "op_ids": ids,
+                "cart": cart.to_dict(),
+            }
+        if still:
+            return {
+                "status": "pending",
+                "reason": still[0]["reason"] or "not synced yet",
+                "retry_after": int(self._pause_left(retailer.key)) or None,
+                "op_ids": ids,
+                "cart": cart.to_dict(),
+            }
+        return {"status": "synced", "reason": "", "retry_after": None, "op_ids": ids, "cart": cart.to_dict()}
+
+    async def add(self, tenant: Tenant, retailer_key: str, wanted: dict[str, float]) -> dict:
+        """Record an add, then sync it onto the live cart when the retailer isn't paused."""
+        positive = {pid: qty for pid, qty in wanted.items() if qty > 0}
+        return await self._record_and_sync(tenant, retailer_key, "add", positive, "add_to_cart")
+
+    async def set_quantities(self, tenant: Tenant, retailer_key: str, quantities: dict[str, float]) -> dict:
+        return await self._record_and_sync(tenant, retailer_key, "set", quantities, "set_cart_quantities")
+
+    async def pending(self, tenant: Tenant, retailer_key: str) -> list[dict]:
+        retailer = get_retailer(retailer_key)
+        await self.store.record_usage(tenant.id, "get_pending_cart", retailer.key, True, 0)
+        return await self.store.list_pending(tenant.id, retailer.key)
+
+    async def sync(self, tenant: Tenant, retailer_key: str, *, tool: str = "sync_cart") -> Cart:
+        """Push pending ops. Re-read the live cart and send only the difference."""
+        retailer = get_retailer(retailer_key)
+        left = self._pause_left(retailer.key)
+        if left > 0:
+            raise Blocked(self._paused_message(retailer.key, self._clock()))
 
         async def fn(r: Retailer, conn: _Conn, s: dict | None) -> Cart:
             await self._require_login(tenant, r, conn, s)
-            current = {i.product_id: i.quantity for i in (await r.cart(conn.http)).items}
-            await r.set_quantities(conn.http, {p: current.get(p, 0) + q for p, q in wanted.items() if q > 0})
+            live = await r.cart(conn.http)
+            current = {i.product_id: i.quantity for i in live.items}
+            ops = await self.store.list_pending(tenant.id, r.key, states=("pending",))
+            # Fold in order from the live snapshot. An add increments; a set replaces.
+            # Only the difference is sent, so a quantity already in the cart is not added twice.
+            desired = dict(current)
+            for op in ops:
+                pid, qty = op["product_id"], float(op["quantity"])
+                if op["op"] == "add":
+                    desired[pid] = desired.get(pid, 0) + qty
+                else:
+                    desired[pid] = qty
+            delta = {pid: qty for pid, qty in desired.items() if abs(qty - current.get(pid, 0)) > 1e-9}
+            if delta:
+                try:
+                    await r.set_quantities(conn.http, delta)
+                except RetailerError as exc:
+                    if isinstance(exc, Blocked):
+                        raise
+                    for op in ops:
+                        await self.store.mark_pending(op["id"], "failed", str(exc))
+                    self._forget(tenant.id, r.key, "cart")
+                    return await r.cart(conn.http)
+            for op in ops:
+                await self.store.mark_pending(op["id"], "synced", "")
             self._forget(tenant.id, r.key, "cart")
             return await r.cart(conn.http)
 
-        cart = await self._run(tenant, retailer.key, "add_to_cart", fn)
-        return self._remember(("cart", tenant.id, retailer.key), cart, self.limits.cart_ttl)
-
-    async def set_quantities(self, tenant: Tenant, retailer_key: str, quantities: dict[str, float]) -> Cart:
-        retailer = get_retailer(retailer_key)
-
-        async def fn(r: Retailer, conn: _Conn, s: dict | None) -> Cart:
-            await self._require_login(tenant, r, conn, s)
-            await r.set_quantities(conn.http, quantities)
-            self._forget(tenant.id, r.key, "cart")
-            return await r.cart(conn.http)
-
-        cart = await self._run(tenant, retailer.key, "set_cart_quantities", fn)
+        cart = await self._run(tenant, retailer.key, tool, fn)
         return self._remember(("cart", tenant.id, retailer.key), cart, self.limits.cart_ttl)

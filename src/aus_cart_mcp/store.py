@@ -48,6 +48,19 @@ CREATE TABLE IF NOT EXISTS usage (
     at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_usage_tenant_at ON usage (tenant_id, at);
+CREATE TABLE IF NOT EXISTS pending_ops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    retailer TEXT NOT NULL,
+    op TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    quantity REAL NOT NULL,
+    state TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_pending_open ON pending_ops (tenant_id, retailer, state, id);
 """
 
 
@@ -202,3 +215,79 @@ class Store:
             "upstream_requests": sum(t["upstream_requests"] for t in tools.values()),
             "by_tool": tools,
         }
+
+    # ── pending cart (recorded writes, synced later) ──────────────────────
+
+    PENDING_TTL_DAYS = 14
+
+    async def enqueue_pending(self, tenant_id: int, retailer: str, op: str, items: dict[str, float]) -> list[int]:
+        """Record a cart write. A newer open op for the same product supersedes the older one."""
+        now = _now()
+
+        def fn(db):
+            ids = []
+            for product_id, quantity in items.items():
+                db.execute(
+                    "UPDATE pending_ops SET state = 'superseded', updated_at = ? "
+                    "WHERE tenant_id = ? AND retailer = ? AND product_id = ? AND state = 'pending'",
+                    (now, tenant_id, retailer, product_id),
+                )
+                cur = db.execute(
+                    "INSERT INTO pending_ops "
+                    "(tenant_id, retailer, op, product_id, quantity, state, reason, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, 'pending', '', ?, ?)",
+                    (tenant_id, retailer, op, product_id, quantity, now, now),
+                )
+                ids.append(cur.lastrowid)
+            return ids
+
+        return await self._run(fn)
+
+    async def list_pending(
+        self, tenant_id: int, retailer: str, *, states: tuple[str, ...] = ("pending", "failed")
+    ) -> list[dict]:
+        placeholders = ",".join("?" * len(states))
+
+        def fn(db):
+            rows = db.execute(
+                "SELECT id, op, product_id, quantity, state, reason, created_at, updated_at "
+                f"FROM pending_ops WHERE tenant_id = ? AND retailer = ? AND state IN ({placeholders}) ORDER BY id",
+                (tenant_id, retailer, *states),
+            ).fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "op": r[1],
+                    "product_id": r[2],
+                    "quantity": r[3],
+                    "state": r[4],
+                    "reason": r[5],
+                    "created_at": r[6],
+                    "updated_at": r[7],
+                }
+                for r in rows
+            ]
+
+        return await self._run(fn)
+
+    async def mark_pending(self, op_id: int, state: str, reason: str = "") -> None:
+        now = _now()
+        await self._run(
+            lambda db: db.execute(
+                "UPDATE pending_ops SET state = ?, reason = ?, updated_at = ? WHERE id = ?",
+                (state, reason, now, op_id),
+            )
+        )
+
+    async def purge_pending(self, older_than_days: int | None = None) -> int:
+        days = self.PENDING_TTL_DAYS if older_than_days is None else older_than_days
+        cutoff = (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days)).isoformat(timespec="seconds")
+
+        def fn(db):
+            cur = db.execute(
+                "DELETE FROM pending_ops WHERE state IN ('synced', 'superseded', 'failed') AND updated_at < ?",
+                (cutoff,),
+            )
+            return cur.rowcount
+
+        return await self._run(fn)
