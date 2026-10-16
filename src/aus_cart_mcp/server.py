@@ -33,7 +33,10 @@ INSTRUCTIONS = (
     "Search Australian retailers and manage the user's own online cart. Call list_retailers to see "
     "which retailers are supported. Search first, then add products by their product_id. "
     "add_to_cart adds on top of what is already in the cart; set_cart_quantities sets exact amounts "
-    "(0 removes). The user reviews the cart and finishes the order with the retailer."
+    "(0 removes). A write is recorded first. status synced means it is on the retailer's cart; "
+    "status pending means it is waiting (see reason and retry_after) and syncs when the retailer "
+    "accepts requests again. get_pending_cart lists those writes; sync_cart pushes them. "
+    "The user reviews the cart and finishes the order with the retailer."
 )
 
 
@@ -125,31 +128,59 @@ def build(store: Store, gateway: Gateway | None = None) -> tuple[MCPServer, Gate
         )
         return result([p.to_dict() for p in products])
 
+    def _outcome(outcome: dict) -> dict:
+        return {k: v for k, v in outcome.items() if k != "op_ids"}
+
     async def _get_cart(ctx: Context, retailer: str) -> str:
-        return result((await gateway.cart(await tenant_of(ctx), retailer)).to_dict())
+        tenant = await tenant_of(ctx)
+        cart = await gateway.cart(tenant, retailer)
+        pending = await gateway.store.list_pending(tenant.id, retailer)
+        return result({**cart.to_dict(), "pending": pending})
 
     async def _add(items: list[dict], ctx: Context, retailer: str) -> str:
-        return result((await gateway.add(await tenant_of(ctx), retailer, parse_quantities(items))).to_dict())
+        outcome = await gateway.add(await tenant_of(ctx), retailer, parse_quantities(items))
+        return result(_outcome(outcome))
 
     async def _set(items: list[dict], ctx: Context, retailer: str) -> str:
-        cart = await gateway.set_quantities(await tenant_of(ctx), retailer, parse_quantities(items))
-        return result(cart.to_dict())
+        outcome = await gateway.set_quantities(await tenant_of(ctx), retailer, parse_quantities(items))
+        return result(_outcome(outcome))
 
     @tool()
     async def get_cart(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
-        """Show the user's current cart at the retailer: items, quantities and totals."""
+        """Show the live cart, plus any writes still waiting to sync."""
         return await _get_cart(ctx, retailer)
+
+    @tool()
+    async def get_pending_cart(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+        """Cart writes recorded but not yet on the retailer's cart.
+
+        pending retries later. failed is permanent and is not retried. synced ops are omitted."""
+        return result(await gateway.pending(await tenant_of(ctx), retailer))
+
+    @tool()
+    async def sync_cart(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+        """Push recorded writes. Re-reads the live cart and applies only the difference.
+
+        If the retailer is paused this raises and the writes stay pending."""
+        tenant = await tenant_of(ctx)
+        cart = await gateway.sync(tenant, retailer)
+        pending = await gateway.store.list_pending(tenant.id, retailer)
+        status = "synced" if not any(o["state"] == "pending" for o in pending) else "pending"
+        return result({**cart.to_dict(), "status": status, "pending": pending})
 
     @tool()
     async def add_to_cart(items: list[dict], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
         """Add products to the user's cart. items: [{"product_id": "...", "quantity": 1}], up to 30.
 
-        Quantities are added on top of what is already in the cart. Returns the updated cart."""
+        Recorded first, then synced. Returns status synced or pending, reason and retry_after.
+        Quantities are added on top of what is already in the cart."""
         return await _add(items, ctx, retailer)
 
     @tool()
     async def set_cart_quantities(items: list[dict], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
-        """Set exact quantities in the user's cart; quantity 0 removes the product. Returns the cart."""
+        """Set exact quantities; quantity 0 removes. Recorded first.
+
+        Returns status synced or pending, plus reason and retry_after."""
         return await _set(items, ctx, retailer)
 
     # Deprecated aliases from 0.1 ("trolley" is Woolworths' word). Removed in 0.3.

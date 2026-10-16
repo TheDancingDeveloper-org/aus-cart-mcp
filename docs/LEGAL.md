@@ -46,7 +46,9 @@ Take legal advice before charging anyone.
   calls start a fresh connection after 30 minutes idle, like a new visitor. Once a stored
   login has expired (its token's `exp`), calls that need no login (search, product lookup)
   go out as an anonymous visitor rather than with the stale cookies, which would be refused.
-- Requests are serialised and spaced per retailer, with a daily cap. Product lookups by id
+- Requests are serialised and spaced per retailer, with a daily cap. A cart write the
+  retailer will not accept yet is kept and sent later with the same calls, still inside
+  that cap. Nothing here checks out or pays. Product lookups by id
   are batched (20 per request) and cached for 6 hours, as are searches.
 - Customer sessions are encrypted at rest, and API keys are stored only as hashes.
 - Every tool call is metered per customer.

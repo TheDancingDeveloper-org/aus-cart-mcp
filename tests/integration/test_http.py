@@ -75,6 +75,8 @@ async def test_tool_list_and_retailer_index(base_url, store):
             "connect_session",
             "disconnect_session",
             "usage_summary",
+            "get_pending_cart",
+            "sync_cart",
             "get_product_image",
             "get_trolley",
             "add_to_trolley",
@@ -101,7 +103,8 @@ async def test_full_flow_errors_and_deprecated_aliases(base_url, store, mock_sta
         added = json.loads(
             text(await c.call_tool("add_to_cart", {"items": [{"product_id": product_id, "quantity": 2}]}))
         )
-        assert added["items"][0]["quantity"] == 2
+        assert added["status"] == "synced" and added["retry_after"] is None
+        assert added["cart"]["items"][0]["quantity"] == 2
 
         bad = await c.call_tool("add_to_cart", {"items": [{"product_id": product_id, "quantity": 500}]})
         assert bad.is_error and "between 0 and 99" in text(bad)
@@ -109,10 +112,11 @@ async def test_full_flow_errors_and_deprecated_aliases(base_url, store, mock_sta
         # 0.1 aliases still work.
         legacy = json.loads(text(await c.call_tool("get_trolley", {})))
         assert legacy["items"][0]["product_id"] == product_id
+        assert "pending" in legacy
         cleared = json.loads(
             text(await c.call_tool("set_cart_quantities", {"items": [{"product_id": product_id, "quantity": 0}]}))
         )
-        assert cleared["items"] == []
+        assert cleared["status"] == "synced" and cleared["cart"]["items"] == []
 
         planned = await c.call_tool("search_products", {"query": "milk", "retailer": "coles"})
         assert planned.is_error and "planned" in text(planned)
