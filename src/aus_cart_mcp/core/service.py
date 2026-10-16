@@ -102,21 +102,11 @@ class CoreService:
         return {"pending": _public(await self.gateway.pending(tenant, retailer))}
 
     async def sync(self, tenant: Tenant, retailer: str) -> dict:
-        """Push recorded writes. A refusal that is still on the books is not "synced"."""
-        try:
-            cart = await self.gateway.sync(tenant, retailer)
-        except Blocked as exc:
-            pending = _public(await self.store.list_pending(tenant.id, retailer))
-            return {
-                "items": [],
-                "subtotal": None,
-                "total": None,
-                "savings": None,
-                "status": "pending",
-                "reason": str(exc),
-                "retry_after": None,
-                "pending": pending,
-            }
+        """Push recorded writes. A pause or a block is raised, not returned as pending.
+
+        A refusal that is still on the books is not reported as synced.
+        """
+        cart = await self.gateway.sync(tenant, retailer)
         pending = _public(await self.store.list_pending(tenant.id, retailer))
         failed = [row for row in pending if row["state"] == "failed"]
         waiting = [row for row in pending if row["state"] == "pending"]
