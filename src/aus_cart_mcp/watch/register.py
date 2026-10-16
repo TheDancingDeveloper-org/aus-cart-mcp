@@ -4,9 +4,8 @@ Imported lazily from ``aus_cart_mcp.server.build`` so a core-only process never
 imports the watch package at module level. Tool names match the cartwatch server.
 Each takes ``retailer`` (default the only configured retailer).
 
-Price lookups go through ``Gateway.search``, which uses the anonymous connection
-when the tenant has no stored session. Cart writes stay on the core tools, which
-require the tenant's own session.
+The tools are adapters over ``WatchService``. They do not open the ledger or
+read the store path themselves.
 """
 
 from __future__ import annotations
@@ -15,10 +14,11 @@ import json
 
 from mcp.server.mcpserver import Context
 
+from aus_cart_mcp.core.service import CoreService
 from aus_cart_mcp.retailers import RETAILERS
 from aus_cart_mcp.retailers.base import RetailerError
 from aus_cart_mcp.store import Tenant
-from aus_cart_mcp.watch.ledger import Ledger
+from aus_cart_mcp.watch.service import WatchService
 
 WATCH_TOOLS = (
     "track_item",
@@ -43,27 +43,19 @@ def resolve_retailer(retailer: str | None) -> str:
     raise RetailerError("retailer is required when more than one is configured")
 
 
-def register(mcp, tool, store, gateway) -> None:
+def register(mcp, tool, store, gateway, core: CoreService) -> None:
     """Attach the watch tools. ``tool`` is the product server's error-wrapping decorator."""
-    ledger = Ledger(store._path)  # same SQLite file as the product store; separate table
+    watch = WatchService(store, gateway, core)
 
     def result_of(tenant: Tenant, retailer: str) -> dict:
         return {"tenant": tenant.name, "retailer": retailer}
-
-    async def _price(tenant: Tenant, retailer: str, product_id: str):
-        """The product with this exact id, or None. Never another search hit."""
-        products = await gateway.search(tenant, retailer, product_id, limit=10, specials_only=False)
-        return next((p for p in products if p.product_id == product_id), None)
 
     @tool()
     async def list_tracked(ctx: Context, retailer: str | None = None) -> str:
         """List items this account is tracking at the retailer."""
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        items = [
-            {"product_id": row.product_id, "name": row.name, "price": row.price}
-            for row in ledger.list(tenant.id, chosen)
-        ]
+        items = await watch.list_tracked(tenant, chosen)
         return json.dumps({**result_of(tenant, chosen), "items": items})
 
     @tool()
@@ -73,27 +65,22 @@ def register(mcp, tool, store, gateway) -> None:
         chosen = resolve_retailer(retailer)
         if not str(product_id).strip():
             raise RetailerError("product_id is required")
-        found = await _price(tenant, chosen, product_id)
-        name = found.name if found is not None else ""
-        price = found.price if found is not None else None
-        ledger.track(tenant.id, chosen, product_id, name=name, price=price)
-        return json.dumps({**result_of(tenant, chosen), "product_id": product_id, "tracked": True, "price": price})
+        tracked = await watch.track(tenant, chosen, product_id)
+        return json.dumps({**result_of(tenant, chosen), **tracked})
 
     @tool()
     async def untrack_item(product_id: str, ctx: Context, retailer: str | None = None) -> str:
         """Stop watching a product for this account."""
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        ledger.untrack(tenant.id, chosen, product_id)
-        return json.dumps({**result_of(tenant, chosen), "product_id": product_id, "tracked": False})
+        return json.dumps({**result_of(tenant, chosen), **(await watch.untrack(tenant, chosen, product_id))})
 
     @tool()
     async def price_history(product_id: str, ctx: Context, retailer: str | None = None) -> str:
-        """Latest observed price for a product this account tracks."""
+        """The current price of a tracked product. A history of observations is not stored yet."""
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        rows = [row for row in ledger.list(tenant.id, chosen) if row.product_id == product_id]
-        points = [{"price": row.price, "name": row.name} for row in rows]
+        points = await watch.price_history(tenant, chosen, product_id)
         return json.dumps({**result_of(tenant, chosen), "product_id": product_id, "points": points})
 
     @tool()
@@ -101,11 +88,7 @@ def register(mcp, tool, store, gateway) -> None:
         """Tracked items this account has a price for."""
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        deals = [
-            {"product_id": row.product_id, "name": row.name, "price": row.price}
-            for row in ledger.list(tenant.id, chosen)
-            if row.price is not None
-        ]
+        deals = await watch.current_deals(tenant, chosen)
         return json.dumps({**result_of(tenant, chosen), "deals": deals})
 
     @tool()
@@ -129,24 +112,19 @@ def register(mcp, tool, store, gateway) -> None:
         """Upstream requests this account has made today, from the core usage meter."""
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        summary = await store.usage_summary(tenant.id, days=1)
-        return json.dumps({**result_of(tenant, chosen), "upstream_today": summary["upstream_requests"]})
+        budget = await watch.budget(tenant, chosen)
+        return json.dumps({**result_of(tenant, chosen), "upstream_today": budget["upstream_today"]})
 
     @tool(name="run_refresh", description="ADMIN: refresh tracked prices for this account against the retailer.")
     async def run_refresh(ctx: Context, retailer: str | None = None) -> str:
         tenant = await _tenant(ctx)
         chosen = resolve_retailer(retailer)
-        refreshed = 0
-        for row in ledger.list(tenant.id, chosen):
-            found = await _price(tenant, chosen, row.product_id)
-            if found is None:
-                continue
-            if ledger.refresh(tenant.id, chosen, row.product_id, name=found.name, price=found.price):
-                refreshed += 1
+        refreshed = await watch.refresh(tenant, chosen)
         return json.dumps({**result_of(tenant, chosen), "refreshed": refreshed})
 
 
 async def _tenant(ctx: Context) -> Tenant:
+    """The tenant the core bearer middleware put on the request."""
     request = getattr(ctx.request_context, "request", None)
     tenant = getattr(getattr(request, "state", None), "tenant", None)
     if tenant is None:

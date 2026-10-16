@@ -236,7 +236,7 @@ def build(
         # Lazy: core must not import the watch package unless the flag is on.
         from aus_cart_mcp.watch.register import register as register_watch
 
-        register_watch(mcp, tool, store, gateway)
+        register_watch(mcp, tool, store, gateway, core)
 
     return mcp, gateway
 

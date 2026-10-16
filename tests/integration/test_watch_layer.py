@@ -116,7 +116,7 @@ def test_a_renamed_tenant_does_not_share_rows(store, gateway):
     from aus_cart_mcp.watch.ledger import Ledger
 
     alice, _ = store.create_tenant_sync("alice")
-    ledger = Ledger(store._path)
+    ledger = Ledger(store.path)
     ledger.track(alice.id, "woolworths", "1", name="Milk", price=2.0)
     other, _ = store.create_tenant_sync("not-alice")
     assert other.id != alice.id
