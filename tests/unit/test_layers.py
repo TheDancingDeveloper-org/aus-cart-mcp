@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2] / "src" / "aus_cart_mcp"
 
-# Root modules that are the core layer, not a layer package.
-CORE_ROOT = ("server.py", "gateway.py", "store.py", "config.py", "__init__.py", "__main__.py")
+# Root modules that are the core layer, not a layer package. Globbed, so a new
+# module at the package root is scanned without being added to a list.
 
 FORBIDDEN = {
     "core": ("aus_cart_mcp.watch", "aus_cart_mcp.ui"),
@@ -52,7 +52,7 @@ def _package(path: Path) -> str:
 
 
 def _core_files() -> list[Path]:
-    files = [ROOT / name for name in CORE_ROOT]
+    files = sorted(path for path in ROOT.glob("*.py"))
     files += sorted((ROOT / "core").rglob("*.py"))
     files += sorted((ROOT / "retailers").rglob("*.py"))
     files += sorted((ROOT / "mock").rglob("*.py"))
@@ -71,7 +71,7 @@ def test_layers_do_not_import_upwards():
 
 
 def test_root_core_modules_are_scanned():
-    """The scan is not vacuous: the real core modules are in it."""
+    """The scan is not vacuous: every root module is in it, including features.py."""
     scanned = {path.name for path in _core_files()}
-    for name in ("server.py", "gateway.py", "store.py"):
+    for name in ("server.py", "gateway.py", "store.py", "features.py"):
         assert name in scanned
