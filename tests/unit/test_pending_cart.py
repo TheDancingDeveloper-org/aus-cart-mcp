@@ -146,3 +146,47 @@ async def test_get_cart_reports_pending_ops_while_paused(store, make_gateway, mo
     # Failed rows are kept, not purged with the settled ones.
     await gateway.store.mark_pending(rows[0]["id"], "failed", "no")
     assert await gateway.store.purge_pending(older_than_days=0) == 0
+
+
+async def test_paused_adds_stack_when_the_cart_is_cached(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(cooloff=600, cart_ttl=3600)
+    tenant = await _connect(store, gateway, mock_state)
+    await gateway.set_quantities(tenant, "woolworths", {"888140": 1})
+    gateway._trip("woolworths")
+    await gateway.add(tenant, "woolworths", {"888140": 1})
+    await gateway.add(tenant, "woolworths", {"888140": 1})
+    clock.now += 601
+    cart = await gateway.sync(tenant, "woolworths")
+    assert [(i.product_id, i.quantity) for i in cart.items] == [("888140", 3)]
+
+
+async def test_a_refused_product_keeps_the_batch_pending(store, gateway, mock_state):
+    tenant = await _connect(store, gateway, mock_state)
+    mock_state.reject_stockcodes = {888140}
+    outcome = await gateway.add(tenant, "woolworths", {"888140": 1, "888141": 2})
+    assert outcome["status"] == "pending" and outcome["permanent"] is True
+    assert [(i["product_id"], i["quantity"]) for i in outcome["cart"]["items"]] == [("888141", 2)]
+    # A later add of a different product must not report synced while the refusal is still open.
+    follow = await gateway.add(tenant, "woolworths", {"888142": 1})
+    assert follow["status"] == "pending" and follow["permanent"] is True
+
+
+async def test_failed_ops_are_purged_after_the_ttl(store, gateway, mock_state):
+    tenant = await _connect(store, gateway, mock_state)
+    mock_state.reject_update = True
+    await gateway.add(tenant, "woolworths", {"888140": 1})
+    failed = (await gateway.pending(tenant, "woolworths"))[0]
+    assert failed["state"] == "failed"
+    # Brand new, so a cutoff of "older than now" does not take it.
+    assert await store.purge_pending(older_than_days=0) == 0
+    db = store._connect()
+    try:
+        db.execute(
+            "UPDATE pending_ops SET updated_at = '2000-01-01T00:00:00+00:00' WHERE id = ?",
+            (failed["id"],),
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert await store.purge_pending(older_than_days=0) == 1
+    assert await gateway.pending(tenant, "woolworths") == []

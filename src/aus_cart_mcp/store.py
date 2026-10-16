@@ -301,7 +301,7 @@ class Store:
 
         def fn(db):
             cur = db.execute(
-                "DELETE FROM pending_ops WHERE state IN ('synced', 'superseded') AND updated_at < ?",
+                "DELETE FROM pending_ops WHERE state IN ('synced', 'superseded', 'failed') AND updated_at < ?",
                 (cutoff,),
             )
             return cur.rowcount
