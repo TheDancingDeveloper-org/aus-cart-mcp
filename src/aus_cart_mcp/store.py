@@ -317,9 +317,8 @@ class Store:
         # Rows are stamped at seconds precision. A cutoff of "now" at that same
         # precision is not strictly older, so subtract one extra second: a row
         # written in the current second survives `older_than_days=0`.
-        cutoff = (
-            datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days, seconds=1)
-        ).isoformat(timespec="seconds")
+        moment = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days, seconds=1)
+        cutoff = moment.isoformat(timespec="seconds")
 
         def fn(db):
             cur = db.execute(

@@ -6,7 +6,6 @@ Bearer <customer API key>``; tools act for that customer only. ``/healthz`` is o
 
 from __future__ import annotations
 
-import base64
 import functools
 import json
 from http.cookies import SimpleCookie
@@ -21,15 +20,11 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from aus_cart_mcp import __version__, config, features
 from aus_cart_mcp.core.service import CoreService
 from aus_cart_mcp.gateway import Gateway, Limits
-from aus_cart_mcp.retailers import CATALOGUE, RETAILERS
-from aus_cart_mcp.retailers.base import Blocked, RetailerError
+from aus_cart_mcp.retailers import RETAILERS
+from aus_cart_mcp.retailers.base import RetailerError
 from aus_cart_mcp.store import Store, Tenant
 
 SERVER_NAME = "aus-cart"
-DEFAULT_RETAILER = "woolworths"
-MAX_LIMIT = 30
-MAX_PRODUCT_IDS = 100
-
 INSTRUCTIONS = (
     "Search Australian retailers and manage the user's own online cart. Call list_retailers to see "
     "which retailers are supported. Search first, then add products by their product_id. "
@@ -113,6 +108,9 @@ def build(
     def result(payload) -> str:
         return json.dumps(payload, ensure_ascii=False, default=str)
 
+    def _retailer(retailer: str | None) -> str:
+        return retailer or core.default_retailer()
+
     @tool()
     async def server_info() -> str:
         """Which layers and retailers this server is running. Needs no retailer session."""
@@ -124,89 +122,52 @@ def build(
 
         login_url / cookie_url let an app connect a session: open login_url in an in-app browser,
         let the user sign in, then pass the cookies for cookie_url to connect_session."""
-        rows = [r.to_dict() for r in CATALOGUE if include_planned or r.status != "planned"]
-        return result(rows)
+        return result(core.retailers(include_planned=include_planned))
 
     @tool()
     async def search_products(
-        query: str, ctx: Context, retailer: str = DEFAULT_RETAILER, limit: int = 10, specials_only: bool = False
+        query: str, ctx: Context, retailer: str | None = None, limit: int = 10, specials_only: bool = False
     ) -> str:
         """Search a retailer's products. Returns product_id, name, price, unit price, size, special and stock."""
-        tenant = await tenant_of(ctx)
-        products = await gateway.search(
-            tenant, retailer, query, limit=max(1, min(limit, MAX_LIMIT)), specials_only=specials_only
+        return result(
+            await core.search(
+                await tenant_of(ctx), _retailer(retailer), query, limit=limit, specials_only=specials_only
+            )
         )
-        return result([p.to_dict() for p in products])
 
-    def _outcome(outcome: dict) -> dict:
-        return {k: v for k, v in outcome.items() if k != "op_ids"}
+    async def _get_cart(ctx: Context, retailer: str | None) -> str:
+        return result(await core.cart_view(await tenant_of(ctx), _retailer(retailer)))
 
-    def _public(rows: list[dict]) -> list[dict]:
-        return [{k: v for k, v in row.items() if k != "base_quantity"} for row in rows]
+    async def _add(items: list[dict], ctx: Context, retailer: str | None) -> str:
+        return result(await core.add(await tenant_of(ctx), _retailer(retailer), parse_quantities(items)))
 
-    async def _get_cart(ctx: Context, retailer: str) -> str:
-        tenant = await tenant_of(ctx)
-        try:
-            live = (await gateway.cart(tenant, retailer)).to_dict()
-        except Blocked as exc:
-            live = {"items": [], "subtotal": None, "total": None, "savings": None, "unavailable": str(exc)}
-        pending = _public(await gateway.store.list_pending(tenant.id, retailer))
-        return result({**live, "pending": pending})
-
-    async def _add(items: list[dict], ctx: Context, retailer: str) -> str:
-        outcome = await gateway.add(await tenant_of(ctx), retailer, parse_quantities(items))
-        return result(_outcome(outcome))
-
-    async def _set(items: list[dict], ctx: Context, retailer: str) -> str:
-        outcome = await gateway.set_quantities(await tenant_of(ctx), retailer, parse_quantities(items))
-        return result(_outcome(outcome))
+    async def _set(items: list[dict], ctx: Context, retailer: str | None) -> str:
+        return result(await core.set_quantities(await tenant_of(ctx), _retailer(retailer), parse_quantities(items)))
 
     @tool()
-    async def get_cart(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
-        """Show the live cart, plus any writes still waiting to sync."""
+    async def get_cart(ctx: Context, retailer: str | None = None) -> str:
+        """The user's cart: items, quantities and totals, plus writes still waiting to sync."""
         return await _get_cart(ctx, retailer)
 
     @tool()
-    async def get_pending_cart(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
-        """Cart writes recorded but not yet on the retailer's cart.
-
-        pending retries later. failed is permanent and is not retried. synced ops are omitted."""
-        return result(await gateway.pending(await tenant_of(ctx), retailer))
+    async def get_pending_cart(ctx: Context, retailer: str | None = None) -> str:
+        """Writes recorded for this cart that are not on the retailer yet, or that the retailer refused."""
+        return result(await core.pending(await tenant_of(ctx), _retailer(retailer)))
 
     @tool()
-    async def sync_cart(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
-        """Push recorded writes. Re-reads the live cart and applies only the difference.
-
-        If the retailer is paused this raises and the writes stay pending."""
-        tenant = await tenant_of(ctx)
-        cart = await gateway.sync(tenant, retailer)
-        pending = _public(await gateway.store.list_pending(tenant.id, retailer))
-        failed = [o for o in pending if o["state"] == "failed"]
-        waiting = [o for o in pending if o["state"] == "pending"]
-        if failed or waiting:
-            payload = {
-                **cart.to_dict(),
-                "status": "pending",
-                "reason": (failed or waiting)[0]["reason"]
-                or ("the retailer rejected the change" if failed else "not synced yet"),
-                "retry_after": None,
-                "pending": pending,
-            }
-            if failed and not waiting:
-                payload["permanent"] = True
-            return result(payload)
-        return result({**cart.to_dict(), "status": "synced", "reason": "", "retry_after": None, "pending": pending})
+    async def sync_cart(ctx: Context, retailer: str | None = None) -> str:
+        """Push recorded writes to the retailer. Returns status synced or pending, plus reason and retry_after."""
+        return result(await core.sync(await tenant_of(ctx), _retailer(retailer)))
 
     @tool()
-    async def clear_pending(ctx: Context, retailer: str = DEFAULT_RETAILER, product_id: str | None = None) -> str:
+    async def clear_pending(ctx: Context, retailer: str | None = None, product_id: str | None = None) -> str:
         """Drop refused cart writes so they stop being reported. Omit product_id to clear every refusal.
 
         Does not change the live cart. Pending (not yet tried) writes are left alone."""
-        cleared = await gateway.clear_failed(await tenant_of(ctx), retailer, product_id or None)
-        return result(cleared)
+        return result(await core.clear_failed(await tenant_of(ctx), _retailer(retailer), product_id or None))
 
     @tool()
-    async def add_to_cart(items: list[dict], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def add_to_cart(items: list[dict], ctx: Context, retailer: str | None = None) -> str:
         """Add products to the user's cart. items: [{"product_id": "...", "quantity": 1}], up to 30.
 
         Recorded first, then synced. Returns status synced or pending, reason and retry_after.
@@ -214,7 +175,7 @@ def build(
         return await _add(items, ctx, retailer)
 
     @tool()
-    async def set_cart_quantities(items: list[dict], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def set_cart_quantities(items: list[dict], ctx: Context, retailer: str | None = None) -> str:
         """Set exact quantities; quantity 0 removes. Recorded first.
 
         Returns status synced or pending, plus reason and retry_after."""
@@ -222,65 +183,50 @@ def build(
 
     # Deprecated aliases from 0.1 ("trolley" is Woolworths' word). Removed in 0.3.
     @tool(name="get_trolley", description="Deprecated alias of get_cart.")
-    async def get_trolley(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def get_trolley(ctx: Context, retailer: str | None = None) -> str:
         return await _get_cart(ctx, retailer)
 
     @tool(name="add_to_trolley", description="Deprecated alias of add_to_cart.")
-    async def add_to_trolley(items: list[dict], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def add_to_trolley(items: list[dict], ctx: Context, retailer: str | None = None) -> str:
         return await _add(items, ctx, retailer)
 
     @tool(name="set_trolley_quantities", description="Deprecated alias of set_cart_quantities.")
-    async def set_trolley_quantities(items: list[dict], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def set_trolley_quantities(items: list[dict], ctx: Context, retailer: str | None = None) -> str:
         return await _set(items, ctx, retailer)
 
     @tool()
-    async def connection_status(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def connection_status(ctx: Context, retailer: str | None = None) -> str:
         """Whether the user's retailer session is connected and logged in."""
-        return result(await gateway.status(await tenant_of(ctx), retailer))
+        return result(await core.status(await tenant_of(ctx), _retailer(retailer)))
 
     @tool()
-    async def connect_session(cookie_header: str, ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def connect_session(cookie_header: str, ctx: Context, retailer: str | None = None) -> str:
         """ADMIN: store the user's logged-in retailer session (the site's cookie header, captured
         after they sign in on their own device). Not for agents: hide this tool from models."""
-        shopper = await gateway.connect(await tenant_of(ctx), retailer, parse_cookie_header(cookie_header))
-        return result({"connected": True, "retailer": retailer, "first_name": shopper.first_name})
+        chosen = _retailer(retailer)
+        return result(await core.connect(await tenant_of(ctx), chosen, parse_cookie_header(cookie_header)))
 
     @tool()
-    async def disconnect_session(ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def disconnect_session(ctx: Context, retailer: str | None = None) -> str:
         """ADMIN: forget the user's stored retailer session."""
-        await gateway.disconnect(await tenant_of(ctx), retailer)
-        return result({"connected": False, "retailer": retailer})
+        chosen = _retailer(retailer)
+        return result(await core.disconnect(await tenant_of(ctx), chosen))
 
     @tool()
-    async def get_products(product_ids: list[str], ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def get_products(product_ids: list[str], ctx: Context, retailer: str | None = None) -> str:
         """Look products up by product_id (up to 100), in one or a few upstream requests. Returns
         {"products": [...], "missing": [...]}: current price, was_price, special flag, unit price, size, stock."""
-        ids = [str(i).strip() for i in product_ids or [] if str(i).strip()]
-        if not ids:
-            raise RetailerError("no product ids given")
-        if len(ids) > MAX_PRODUCT_IDS:
-            raise RetailerError(f"at most {MAX_PRODUCT_IDS} product ids per call")
-        products = await gateway.products(await tenant_of(ctx), retailer, ids)
-        known = {p.product_id for p in products}
-        return result({"products": [p.to_dict() for p in products], "missing": [i for i in ids if i not in known]})
+        return result(await core.products(await tenant_of(ctx), _retailer(retailer), product_ids))
 
     @tool()
-    async def get_product_image(product_id: str, ctx: Context, retailer: str = DEFAULT_RETAILER) -> str:
+    async def get_product_image(product_id: str, ctx: Context, retailer: str | None = None) -> str:
         """A product's photo as base64 with its content type. Photos rarely change: fetch once and keep a copy."""
-        data, content_type = await gateway.image(await tenant_of(ctx), retailer, product_id)
-        return result(
-            {
-                "product_id": str(product_id),
-                "content_type": content_type,
-                "data_base64": base64.b64encode(data).decode(),
-            }
-        )
+        return result(await core.product_image(await tenant_of(ctx), _retailer(retailer), product_id))
 
     @tool()
     async def usage_summary(ctx: Context, days: int = 30) -> str:
         """This account's metered usage: tool calls and upstream requests over the last N days."""
-        tenant = await tenant_of(ctx)
-        return result(await store.usage_summary(tenant.id, max(1, min(days, 366))))
+        return result(await core.usage(await tenant_of(ctx), max(1, min(days, 366))))
 
     return mcp, gateway
 
