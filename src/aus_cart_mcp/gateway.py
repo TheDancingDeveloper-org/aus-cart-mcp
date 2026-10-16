@@ -85,7 +85,7 @@ class _Conn:
     transport: _MeteredTransport
     saved_jar: dict[str, str]
     last_used: float = 0.0
-    refreshed: bool = False  # one login-renewal attempt per connection
+    refresh_for_exp: float | None = None  # expiry we already tried to renew; one attempt per token
 
 
 class Gateway:
@@ -207,15 +207,17 @@ class Gateway:
     async def _maybe_refresh(self, tenant: Tenant, retailer: Retailer, conn: _Conn, stored: dict | None) -> None:
         """Renew a login that is inside its last 10 minutes, before a call that needs it.
 
-        One attempt per connection: a retailer that does not hand back a new expiry must not be
-        asked again on every cart call. The request is metered like any other (the transport counts it).
+        One attempt per token: a retailer that does not hand back a new expiry must not be asked
+        again on every cart call, but the next token (a later expiry) is renewed when its own
+        window opens. The request is metered like any other (the transport counts it).
         """
-        if stored is None or conn.refreshed:
+        if stored is None:
             return
         cookies = {c.name: c.value for c in conn.http.cookies.jar}
-        if not retailer.login_expiring(cookies, self._wall(), within=10 * 60):
+        exp = retailer.login_expiring(cookies, self._wall(), within=10 * 60)
+        if exp is False or exp == conn.refresh_for_exp:
             return
-        conn.refreshed = True
+        conn.refresh_for_exp = exp
         if await retailer.refresh_session(conn.http):
             self._forget(tenant.id, retailer.key, "shopper")
 

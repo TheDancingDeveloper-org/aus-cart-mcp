@@ -144,8 +144,8 @@ class Retailer(Protocol):
         """True when the stored cookies show the customer's login has expired (False when it can't tell)."""
         ...
 
-    def login_expiring(self, cookies: dict[str, str], now: float, *, within: float) -> bool:
-        """True when the login expires within `within` seconds. Default: never, so nothing is refreshed."""
+    def login_expiring(self, cookies: dict[str, str], now: float, *, within: float) -> float | bool:
+        """The token's expiry when it is inside `within` seconds, else False. Default: never."""
         return False
 
     async def refresh_session(self, http: httpx.AsyncClient) -> bool:

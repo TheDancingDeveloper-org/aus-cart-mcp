@@ -86,9 +86,12 @@ class Woolworths:
         exp = self._token_exp(cookies)
         return exp is not None and exp <= now
 
-    def login_expiring(self, cookies: dict[str, str], now: float, *, within: float) -> bool:
+    def login_expiring(self, cookies: dict[str, str], now: float, *, within: float) -> float | bool:
+        """The token's `exp` when it falls inside the window, else False. Callers key one attempt on it."""
         exp = self._token_exp(cookies)
-        return exp is not None and now < exp <= now + within
+        if exp is not None and now < exp <= now + within:
+            return exp
+        return False
 
     async def refresh_session(self, http: httpx.AsyncClient) -> bool:
         """GET /auth/heartbeat, the call the website makes about every 20 minutes to renew the login.
