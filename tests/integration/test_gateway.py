@@ -30,10 +30,11 @@ async def test_connect_add_set_status_disconnect(store, gateway, mock_state):
     shopper = await gateway.connect(tenant, "woolworths", parse_cookie_header(signed_in_cookie(mock_state, "Sam")))
     assert shopper.first_name == "Sam"
     await gateway.add(tenant, "woolworths", {"888140": 1})
-    cart = await gateway.add(tenant, "woolworths", {"888140": 1})
-    assert [(i.product_id, i.quantity) for i in cart.items] == [("888140", 2)]
-    cart = await gateway.set_quantities(tenant, "woolworths", {"888140": 0})
-    assert cart.items == []
+    outcome = await gateway.add(tenant, "woolworths", {"888140": 1})
+    assert outcome["status"] == "synced"
+    assert [(i["product_id"], i["quantity"]) for i in outcome["cart"]["items"]] == [("888140", 2)]
+    outcome = await gateway.set_quantities(tenant, "woolworths", {"888140": 0})
+    assert outcome["status"] == "synced" and outcome["cart"]["items"] == []
     status = await gateway.status(tenant, "woolworths")
     assert status["connected"] is True and status["first_name"] == "Sam"
     await gateway.disconnect(tenant, "woolworths")
