@@ -3,7 +3,7 @@
 import pytest
 
 from aus_cart_mcp.mock.woolworths import signed_in_cookie
-from aus_cart_mcp.retailers.base import Blocked, RetailerError
+from aus_cart_mcp.retailers.base import Blocked, RetailerError, SessionRequired
 from aus_cart_mcp.server import parse_cookie_header
 
 
@@ -198,6 +198,20 @@ async def test_searches_go_anonymous_when_the_stored_login_has_expired(store, ma
     gateway._conns.pop((None, "woolworths"))
     await gateway.search(tenant, "woolworths", "bread", limit=1, specials_only=False)
     assert (None, "woolworths") not in gateway._conns
+
+
+async def test_cart_calls_ask_for_a_reconnect_when_the_stored_login_has_expired(store, make_gateway, mock_state, clock):
+    gateway = make_gateway(cart_ttl=0)
+    tenant, _ = store.create_tenant_sync("owner")
+    cookies = parse_cookie_header(signed_in_cookie(mock_state))
+    await gateway.connect(tenant, "woolworths", cookies)
+    stale = {**cookies, "wow-auth-token": _jwt(clock.wall - 60)}
+    await store.put_session(tenant.id, "woolworths", {"cookies": stale})
+    sent = sum(c.transport.count for c in gateway._conns.values())
+    with pytest.raises(SessionRequired, match="expired"):
+        await gateway.cart(tenant, "woolworths")
+    assert sum(c.transport.count for c in gateway._conns.values()) == sent  # nothing went to Woolworths
+    assert gateway._pause_left("woolworths") == 0  # and nobody else is paused
 
 
 def test_woolworths_login_expiry_reads_only_exp():

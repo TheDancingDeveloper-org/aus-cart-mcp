@@ -244,6 +244,10 @@ class Gateway:
             # The stored login has expired, and stale session cookies get refused by bot protection (and would
             # pause everyone). Calls that need no login go out as an anonymous visitor instead.
             stored = None
+        if not guest_ok and stored is not None and retailer.login_expired(stored.get("cookies") or {}, self._wall()):
+            # A call that needs the login would send those stale cookies anyway; Woolworths answers them with
+            # a 403 that reads as a block and pauses every tenant. Ask for a reconnect without calling out.
+            raise SessionRequired(f"the saved {retailer.info.name} session has expired; reconnect it")
         conn_owner = tenant.id if stored is not None or not guest_ok else None
         lock = self._locks.setdefault((conn_owner, retailer.key), asyncio.Lock())
         upstream, ok = 0, False
