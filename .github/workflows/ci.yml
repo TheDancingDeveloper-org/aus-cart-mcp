@@ -4,13 +4,12 @@
 # through .github/scripts/in-container.sh, because the runners drive the host's
 # Docker daemon, so `container:` jobs don't work there.
 #
-# Deploy is optional and fully parameterised. It runs only when the repo
-# variable DEPLOY_ENABLED is 'true', and takes everything environment-specific
-# from variables and secrets:
-#   vars:    DEPLOY_SCRIPT_URL, DEPLOY_STACK_NAME, DEPLOY_STACK_DIR
-#   secrets: DEPLOY_GIT_TOKEN, DEPLOY_GIT_ACCOUNT, DEPLOY_API_KEY, DEPLOY_API_SECRET
-# The script receives IMAGE_NAME and IMAGE_TAG and pins the new image in the
-# target environment.
+# Deploy: after the image is pushed, the `deploy` job pins its digest in
+# indexarr/ops apps/prod-myaiagent with the apps-bump image (a PR; Argo CD
+# deploys after merge). Off by default: it runs only when the repo variable
+# DEPLOY_ENABLED is 'true' (kept off during the prod-myaiagent 7-day rollback
+# window, to 2026-12-03) and needs the secret OPS_BUMP_TOKEN.
+
 name: CI
 
 on:
@@ -58,6 +57,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -66,7 +67,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true
@@ -82,22 +84,28 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     needs: [image]
     runs-on: [self-hosted, docker, publish]
+    permissions:
+      contents: read
+      packages: read
     concurrency:
-      group: deploy-${{ vars.DEPLOY_STACK_NAME }}
+      group: deploy-prod-myaiagent-aus-cart-mcp
       cancel-in-progress: false
     env:
-      IMAGE_TAG: ${{ github.sha }}
-      STACK_NAME: ${{ vars.DEPLOY_STACK_NAME }}
-      STACK_DIR: ${{ vars.DEPLOY_STACK_DIR }}
-      GIT_AUTH_TOKEN: ${{ secrets.DEPLOY_GIT_TOKEN }}
-      KOMODO_GIT_ACCOUNT: ${{ secrets.DEPLOY_GIT_ACCOUNT }}
-      KOMODO_API_KEY: ${{ secrets.DEPLOY_API_KEY }}
-      KOMODO_API_SECRET: ${{ secrets.DEPLOY_API_SECRET }}
-      DEPLOY_SCRIPT_URL: ${{ vars.DEPLOY_SCRIPT_URL }}
+      OPS_BUMP_TOKEN: ${{ secrets.OPS_BUMP_TOKEN }}
+      IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+      # apps-bump verifies the digest in the private ghcr package: read it with this
+      # run's own token. The ops forge uses OPS_BUMP_TOKEN.
+      REGISTRY_HOST: ghcr.io
+      REGISTRY_USER: ${{ github.actor }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: pin the image and deploy
+      - name: pin the image digest in ops (apps-bump)
         run: |
           set -euo pipefail
-          : "${DEPLOY_SCRIPT_URL:?set the DEPLOY_SCRIPT_URL repo variable}"
-          curl -sSf -H "Authorization: token $GIT_AUTH_TOKEN" -o "$RUNNER_TEMP/deploy.sh" "$DEPLOY_SCRIPT_URL"
-          bash "$RUNNER_TEMP/deploy.sh"
+          : "${OPS_BUMP_TOKEN:?set the OPS_BUMP_TOKEN secret}"
+          : "${IMAGE_DIGEST:?the image job produced no digest}"
+          printf '%s' "$OPS_BUMP_TOKEN" | docker login repo.indexarr.net -u ops-bump --password-stdin
+          docker run --rm -e OPS_BUMP_TOKEN -e REGISTRY_HOST -e REGISTRY_USER -e REGISTRY_TOKEN \
+            -e GITHUB_REPOSITORY -e GITHUB_SHA -e GITHUB_RUN_ID -e GITHUB_SERVER_URL \
+            repo.indexarr.net/indexarr/apps-bump@sha256:5c7a89bc568be5dbba1bf80acc11f1d526724cf2fa03e90f71287f76d30191b0 \
+            --app prod-myaiagent --image "$IMAGE_NAME" --digest "$IMAGE_DIGEST"
